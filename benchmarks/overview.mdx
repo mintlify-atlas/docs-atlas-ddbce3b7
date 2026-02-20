@@ -94,40 +94,43 @@ MultiAgentBench evaluates performance across multiple dimensions:
 
 ### Basic Usage
 
+To run a benchmark task, use the MARBLE engine with a YAML configuration:
+
 ```python
-from marble import MultiAgentSystem
-import json
+from marble.configs.config import Config
+from marble.engine.engine import Engine
 
-# Load a benchmark task
-with open('multiagentbench/coding/coding_main.jsonl') as f:
-    task = json.loads(f.readline())
+# Load configuration from YAML
+config = Config.load('path/to/config.yaml')
 
-# Initialize multi-agent system
-mas = MultiAgentSystem.from_config(task)
+# Initialize engine
+engine = Engine(config)
 
-# Run the task
-result = mas.run()
+# Run the simulation
+engine.start()
+```
 
-# Evaluate results
-print(f"Success: {result.success}")
-print(f"Iterations: {result.iterations}")
-print(f"Score: {result.score}")
+### Running from Command Line
+
+The recommended way to run benchmarks is using the main entry point:
+
+```bash
+python -m marble.main --config_path multiagentbench/coding/config_1.yaml
 ```
 
 ### Batch Evaluation
 
-```python
-from marble.benchmarks import BenchmarkRunner
+For running multiple benchmark tasks:
 
-# Run all coding tasks
-runner = BenchmarkRunner(
-    benchmark='coding',
-    model='gpt-4o',
-    output_dir='results/coding'
-)
+```bash
+# Convert JSONL to YAML configs first
+cd multiagentbench
+bash runjsonl2yaml.sh
 
-results = runner.run_all()
-runner.generate_report(results)
+# Run each generated config
+for config in configs/coding/*.yaml; do
+    python -m marble.main --config_path "$config"
+done
 ```
 
 ## Converting JSONL to YAML

@@ -353,19 +353,6 @@ mc_env = MinecraftEnvironment(
 )
 
 # Create multi-agent system
-mas = MultiAgentSystem(
-    agents=task['agents'],
-    environment=mc_env,
-    relationships=task['relationships']
-)
-
-# Run construction task
-result = mas.run(task['task']['content'])
-
-print(f"Build Complete: {result.success}")
-print(f"Blocks Placed: {result.blocks_placed}")
-print(f"Accuracy: {result.accuracy:.1%}")
-```
 
 ### Evaluate Construction
 
@@ -390,23 +377,6 @@ print(f"Overall: {scores.overall:.2f}")
 ### Batch Evaluation
 
 ```python
-from marble.benchmarks import BenchmarkRunner
-
-runner = BenchmarkRunner(
-    benchmark='minecraft',
-    model='gpt-4o',
-    num_tasks=100,
-    output_dir='results/minecraft',
-    minecraft_host='localhost',
-    minecraft_port=25565
-)
-
-results = runner.run_all()
-
-print(f"Tasks Completed: {results.success_rate:.1%}")
-print(f"Avg Accuracy: {results.avg_accuracy:.1%}")
-print(f"Avg Actions: {results.avg_actions:.0f}")
-```
 
 ## Visualization
 

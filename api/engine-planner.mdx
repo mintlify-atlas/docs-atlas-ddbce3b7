@@ -1,0 +1,225 @@
+---
+title: EnginePlanner
+description: Task assignment and scheduling orchestrator for multi-agent systems
+---
+
+## Overview
+
+The `EnginePlanner` class handles intelligent task assignment and scheduling for agents using various planning strategies. It leverages LLMs to dynamically assign tasks based on agent profiles, current progress, and task requirements.
+
+## Class Definition
+
+```python
+from marble.engine.engine_planner import EnginePlanner
+```
+
+## Constructor
+
+### `__init__(agent_graph: AgentGraph, memory: Any, config: Dict[str, Any], task: str, model: str = "gpt-3.5-turbo")`
+
+Initialize the EnginePlanner.
+
+<ParamField path="agent_graph" type="AgentGraph" required>
+  The graph of agents to orchestrate
+</ParamField>
+
+<ParamField path="memory" type="Any" required>
+  Shared memory instance (an instance of SharedMemory)
+</ParamField>
+
+<ParamField path="config" type="Dict[str, Any]" required>
+  Configuration parameters including:
+  - `initial_progress`: Starting progress description
+</ParamField>
+
+<ParamField path="task" type="str" required>
+  The overall task description
+</ParamField>
+
+<ParamField path="model" type="str" default="gpt-3.5-turbo">
+  The LLM model to use for planning
+</ParamField>
+
+**Attributes:**
+- `agent_graph`: The agent graph being orchestrated
+- `memory`: Shared memory for coordination
+- `config`: Configuration settings
+- `current_progress`: Current task progress
+- `task`: Task description
+- `model`: LLM model identifier
+- `token_usage`: Cumulative token usage counter
+
+## Planning Methods
+
+### `create_prompt() -> str`
+
+Create a base prompt for the LLM to assign tasks to agents.
+
+<ResponseField name="prompt" type="str">
+  The base prompt string including task description, progress, and agent profiles
+</ResponseField>
+
+### `assign_tasks(planning_method: str = "naive") -> Dict[str, Any]`
+
+Assign tasks to agents using one of four planning strategies.
+
+<ParamField path="planning_method" type="str" default="naive">
+  The planning strategy to use:
+  - `"naive"`: Basic planning with direct task assignment
+  - `"cot"`: Chain-of-Thought planning with step-by-step reasoning
+  - `"group_discuss"`: Each agent proposes a subtask, then planner synthesizes
+  - `"cognitive_evolve"`: Uses memory to compare expected vs. actual progress
+</ParamField>
+
+<ResponseField name="assignment" type="Dict[str, Any]">
+  Task assignments dictionary containing:
+  - `tasks`: Dictionary mapping agent IDs to task descriptions
+  - `continue`: Boolean flag indicating whether to continue execution
+  - Additional fields depending on planning method (e.g., `chain_of_thought`, `expected_result`)
+</ResponseField>
+
+## Progress Management
+
+### `update_progress(summary: str)`
+
+Update the current progress based on the agents' outputs.
+
+<ParamField path="summary" type="str" required>
+  Summary of the latest iteration
+</ParamField>
+
+### `summarize_output(summary: str, task: str, output_format: str) -> Message`
+
+Summarize the output of the agents.
+
+<ParamField path="summary" type="str" required>
+  Summary of the latest iteration
+</ParamField>
+
+<ParamField path="task" type="str" required>
+  The task description
+</ParamField>
+
+<ParamField path="output_format" type="str" required>
+  Desired output format specification (JSON schema)
+</ParamField>
+
+<ResponseField name="summary" type="Message">
+  The summarized output message
+</ResponseField>
+
+### `decide_next_step(agents_results: List[Dict[str, Any]]) -> bool`
+
+Decide whether to continue or terminate the simulation based on agents' results.
+
+<ParamField path="agents_results" type="List[Dict[str, Any]]" required>
+  The results from all agents
+</ParamField>
+
+<ResponseField name="continue" type="bool">
+  True to continue execution, False to terminate
+</ResponseField>
+
+## Planning Methods in Detail
+
+### Naive Planning
+
+Basic planning that directly assigns tasks based on agent profiles and current progress.
+
+```python
+assignment = planner.assign_tasks(planning_method="naive")
+# Returns: {"tasks": {"agent1": "...", "agent2": "..."}, "continue": true}
+```
+
+### Chain-of-Thought (CoT)
+
+Includes step-by-step reasoning in the planning process.
+
+```python
+assignment = planner.assign_tasks(planning_method="cot")
+# Returns: {
+#   "tasks": {...},
+#   "chain_of_thought": "Step 1: ... Step 2: ...",
+#   "continue": true
+# }
+```
+
+### Group Discussion
+
+Each agent proposes their own subtask before the planner synthesizes a final plan.
+
+```python
+assignment = planner.assign_tasks(planning_method="group_discuss")
+# Each agent contributes a proposal, then synthesized into final plan
+```
+
+### Cognitive Evolve
+
+Uses memory from previous rounds to evolve planning based on expected vs. actual progress.
+
+```python
+assignment = planner.assign_tasks(planning_method="cognitive_evolve")
+# Returns: {
+#   "tasks": {...},
+#   "expected_result": "...",
+#   "expected_progress": "...",
+#   "evolving_experiences": "...",
+#   "continue": true
+# }
+```
+
+## Usage Example
+
+```python
+from marble.engine.engine_planner import EnginePlanner
+from marble.graph.agent_graph import AgentGraph
+from marble.memory.shared_memory import SharedMemory
+
+# Setup
+agent_graph = AgentGraph(agents=[agent1, agent2, agent3], structure_config=config)
+memory = SharedMemory()
+config = {
+    "initial_progress": "Starting research project",
+    "max_iterations": 10
+}
+
+# Create planner
+planner = EnginePlanner(
+    agent_graph=agent_graph,
+    memory=memory,
+    config=config,
+    task="Conduct a literature review and propose a research idea",
+    model="gpt-4"
+)
+
+# Assign tasks using chain-of-thought
+assignment = planner.assign_tasks(planning_method="cot")
+print(assignment["tasks"])
+print(assignment["chain_of_thought"])
+
+# Execute agents and update progress
+# ... agent execution ...
+planner.update_progress("Completed literature review")
+
+# Decide next step
+should_continue = planner.decide_next_step(agents_results)
+
+# Get final summary
+final_output = planner.summarize_output(
+    summary="All tasks completed",
+    task=planner.task,
+    output_format='{"title": "string", "findings": ["string"]}'
+)
+
+print(f"Total tokens used: {planner.token_usage}")
+```
+
+## Token Usage Tracking
+
+The `EnginePlanner` automatically tracks token usage across all LLM calls:
+
+```python
+planner = EnginePlanner(...)
+assignment = planner.assign_tasks()
+print(f"Tokens used: {planner.token_usage}")
+```

@@ -1,0 +1,261 @@
+---
+title: LongTermMemory
+description: Semantic memory retrieval system using embeddings and similarity search
+---
+
+## Overview
+
+The `LongTermMemory` class implements a semantic memory system that stores information with embeddings and retrieves it based on relevance using cosine similarity. It extends `BaseMemory` and is ideal for maintaining historical context across agent interactions.
+
+## Class Definition
+
+```python
+from marble.memory.long_term_memory import LongTermMemory
+```
+
+## Constructor
+
+### `__init__()`
+
+Initialize the memory module.
+
+**Attributes:**
+- `storage`: List of tuples containing (information, embedding) pairs
+
+## Methods
+
+### `update(key: str, information: Dict[str, Any])`
+
+Update memory with new information.
+
+<ParamField path="key" type="str" required>
+  Key parameter (kept for signature consistency with SharedMemory, not used internally)
+</ParamField>
+
+<ParamField path="information" type="Dict[str, Any]" required>
+  Information to store in memory. Can contain strings or Message objects.
+</ParamField>
+
+**Note:** This method automatically generates embeddings using `text-embedding-3-small` model.
+
+### `retrieve_latest() -> Any`
+
+Retrieve the most recent information from memory.
+
+<ResponseField name="information" type="Any">
+  The most recently stored information, or None if memory is empty
+</ResponseField>
+
+### `retrieve_most_relevant(information: Dict[str, Union[str, Message]], n: int = 1, summarize: bool = False) -> Any`
+
+Retrieve the most relevant information from memory based on semantic similarity.
+
+<ParamField path="information" type="Dict[str, Union[str, Message]]" required>
+  Query information for retrieval
+</ParamField>
+
+<ParamField path="n" type="int" default="1">
+  Number of relevant items to retrieve
+</ParamField>
+
+<ParamField path="summarize" type="bool" default="false">
+  Whether to summarize the retrieved information using an LLM
+</ParamField>
+
+<ResponseField name="results" type="Union[List[Dict[str, Union[str, Message]]], Message, None]">
+  - If `summarize=False`: List of most relevant information items
+  - If `summarize=True`: Summarized Message object
+  - None if memory is empty
+</ResponseField>
+
+### `summarize(memory: List[Dict[str, Union[str, Message]]]) -> Message`
+
+Summarize the input memory using an LLM.
+
+<ParamField path="memory" type="List[Dict[str, Union[str, Message]]]" required>
+  Input memory to be summarized. If empty, summarizes all stored memory (warns about potential token cost).
+</ParamField>
+
+<ResponseField name="summary" type="Message">
+  Summarized message containing concise representation of the memory
+</ResponseField>
+
+**Warning:** Summarizing entire long-term memory can consume many tokens.
+
+### `retrieve_all() -> List[Dict[str, Union[str, Message]]]`
+
+Retrieve all stored information.
+
+<ResponseField name="all_memory" type="List[Dict[str, Union[str, Message]]]">
+  All stored information (without embeddings)
+</ResponseField>
+
+## Usage Example
+
+```python
+from marble.memory.long_term_memory import LongTermMemory
+
+# Initialize memory
+memory = LongTermMemory()
+
+# Store information
+memory.update("context", {
+    "agent": "researcher",
+    "action": "literature_review",
+    "findings": "Found 15 relevant papers on multi-agent systems"
+})
+
+memory.update("context", {
+    "agent": "analyst",
+    "action": "data_analysis",
+    "results": "Identified 3 key trends in the dataset"
+})
+
+memory.update("context", {
+    "agent": "researcher",
+    "action": "experiment",
+    "outcome": "Achieved 95% accuracy on test set"
+})
+
+# Retrieve latest entry
+latest = memory.retrieve_latest()
+print(latest["action"])  # "experiment"
+
+# Retrieve most relevant information
+query = {
+    "topic": "research papers",
+    "context": "literature review results"
+}
+relevant = memory.retrieve_most_relevant(query, n=2)
+for item in relevant:
+    print(item)
+
+# Retrieve and summarize
+summary = memory.retrieve_most_relevant(
+    query,
+    n=3,
+    summarize=True
+)
+print(summary.content)
+
+# Get all stored information
+all_memory = memory.retrieve_all()
+print(f"Total items in memory: {len(all_memory)}")
+```
+
+## Advanced Usage
+
+### Multi-Agent Coordination
+
+```python
+# Create shared memory for agents
+memory = LongTermMemory()
+
+# Agent 1 stores observation
+memory.update("observation", {
+    "agent_id": "agent1",
+    "timestamp": "2024-01-15T10:30:00",
+    "observation": "User requested price negotiation for product X",
+    "sentiment": "neutral"
+})
+
+# Agent 2 stores action
+memory.update("action", {
+    "agent_id": "agent2",
+    "timestamp": "2024-01-15T10:31:00",
+    "action": "offer_price",
+    "price": 150,
+    "reasoning": "Based on market analysis"
+})
+
+# Agent 3 retrieves relevant context for decision-making
+context_query = {
+    "context": "negotiation history",
+    "focus": "pricing decisions"
+}
+relevant_context = memory.retrieve_most_relevant(context_query, n=5)
+
+# Use retrieved context for informed decision
+for ctx in relevant_context:
+    print(f"Relevant: {ctx}")
+```
+
+### Memory Summarization
+
+```python
+memory = LongTermMemory()
+
+# Store multiple interactions
+for i in range(10):
+    memory.update("interaction", {
+        "step": i,
+        "status": "completed",
+        "details": f"Processing step {i}"
+    })
+
+# Get concise summary of all interactions
+recent_items = memory.retrieve_all()[-5:]  # Last 5 items
+summary = memory.summarize(recent_items)
+print(summary.content)
+```
+
+## Semantic Search Example
+
+```python
+memory = LongTermMemory()
+
+# Store various types of information
+memory.update("doc", {"type": "research", "content": "Neural networks show promise in NLP tasks"})
+memory.update("doc", {"type": "code", "content": "Implemented transformer model in PyTorch"})
+memory.update("doc", {"type": "result", "content": "Achieved BLEU score of 0.85 on translation task"})
+memory.update("doc", {"type": "research", "content": "Large language models demonstrate reasoning capabilities"})
+
+# Semantic search for AI research
+query = {"search": "artificial intelligence research findings"}
+results = memory.retrieve_most_relevant(query, n=2)
+
+# Results will be semantically similar, not keyword-based
+for result in results:
+    print(result["content"])
+```
+
+## Performance Considerations
+
+- **Embedding Generation**: Each `update()` call generates embeddings via API, which has latency and cost
+- **Memory Growth**: Storage grows linearly with each update; consider periodic cleanup for long-running systems
+- **Retrieval Speed**: Cosine similarity computation is O(n) where n is the number of stored items
+- **Summarization Cost**: Using `summarize=True` makes additional LLM API calls
+
+## Integration with Agents
+
+```python
+from marble.agent.base_agent import BaseAgent
+from marble.memory.long_term_memory import LongTermMemory
+
+class ResearchAgent(BaseAgent):
+    def __init__(self, agent_id: str, memory: LongTermMemory):
+        super().__init__(agent_id)
+        self.memory = memory
+    
+    def conduct_research(self, topic: str):
+        # Retrieve relevant past research
+        past_research = self.memory.retrieve_most_relevant(
+            {"topic": topic},
+            n=3
+        )
+        
+        # Use context for current task
+        # ... research logic ...
+        
+        # Store new findings
+        self.memory.update("research", {
+            "agent": self.agent_id,
+            "topic": topic,
+            "findings": "New research results..."
+        })
+
+# Usage
+memory = LongTermMemory()
+agent = ResearchAgent("researcher_1", memory)
+agent.conduct_research("multi-agent reinforcement learning")
+```

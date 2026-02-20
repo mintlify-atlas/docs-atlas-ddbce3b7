@@ -81,8 +81,11 @@
             "group": "Core",
             "pages": [
               "api/engine",
+              "api/engine-planner",
               "api/base-agent",
-              "api/base-environment"
+              "api/base-environment",
+              "api/config",
+              "api/agent-graph"
             ]
           },
           {
@@ -99,14 +102,16 @@
               "api/environments/coding-env",
               "api/environments/research-env",
               "api/environments/db-env",
-              "api/environments/werewolf-env"
+              "api/environments/werewolf-env",
+              "api/environments/world-env"
             ]
           },
           {
             "group": "Memory",
             "pages": [
               "api/memory/base-memory",
-              "api/memory/shared-memory"
+              "api/memory/shared-memory",
+              "api/memory/long-term-memory"
             ]
           },
           {

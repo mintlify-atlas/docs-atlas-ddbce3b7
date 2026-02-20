@@ -1,0 +1,263 @@
+---
+title: WorldSimulationEnvironment
+description: Simulation environment for multi-agent negotiation and interaction scenarios
+---
+
+## Overview
+
+The `WorldSimulationEnvironment` class extends `BaseEnvironment` to provide a specialized simulation environment for agent negotiations and interactions. It includes pre-configured actions for price negotiations, information exchange, and decision-making.
+
+## Class Definition
+
+```python
+from marble.environments.world_env import WorldSimulationEnvironment
+```
+
+## Constructor
+
+### `__init__(config: Dict[str, Any], name: str = "WorldSimulationEnvironment")`
+
+Initialize the environment with agents, actions, and conversation tracking.
+
+<ParamField path="config" type="Dict[str, Any]" required>
+  Configuration including agents and task settings
+</ParamField>
+
+<ParamField path="name" type="str" default="WorldSimulationEnvironment">
+  Name identifier for the environment
+</ParamField>
+
+## Registered Actions
+
+The environment automatically registers six negotiation actions:
+
+### `offer_price`
+
+Make a price offer in the negotiation.
+
+<ParamField path="price" type="int" required>
+  The offered price
+</ParamField>
+
+<ParamField path="reason" type="str">
+  Reason for offering this price (optional)
+</ParamField>
+
+<ResponseField name="response" type="Dict[str, Any]">
+  Response containing:
+  - `success`: Boolean indicating success
+  - `offered_price`: The price offered
+  - `reason`: The provided reason or "No reason provided"
+</ResponseField>
+
+### `accept_offer`
+
+Accept the current offer to finalize the negotiation.
+
+<ResponseField name="response" type="Dict[str, Any]">
+  Response containing:
+  - `success`: Boolean (true)
+  - `message`: "Offer accepted. Negotiation concluded."
+</ResponseField>
+
+**Note:** This action sets `self.done = True` to terminate the simulation.
+
+### `reject_and_counter`
+
+Reject the current offer and provide a counter offer.
+
+<ParamField path="counter_price" type="int" required>
+  The counter offer price
+</ParamField>
+
+<ParamField path="reason" type="str">
+  Reason for the counter offer (optional)
+</ParamField>
+
+<ResponseField name="response" type="Dict[str, Any]">
+  Response containing:
+  - `success`: Boolean (true)
+  - `counter_price`: The counter price
+  - `reason`: The provided reason or "No reason provided"
+</ResponseField>
+
+### `provide_information`
+
+Provide supporting information to justify the price or other negotiation details.
+
+<ParamField path="info_type" type="str" required>
+  Type of information (e.g., "Vehicle History", "Market Comparison")
+</ParamField>
+
+<ParamField path="details" type="str" required>
+  Detailed information or justification
+</ParamField>
+
+<ResponseField name="response" type="Dict[str, Any]">
+  Response containing:
+  - `success`: Boolean (true)
+  - `info_type`: The type of information provided
+  - `details`: The detailed information
+</ResponseField>
+
+### `inquire_intentions`
+
+Ask the other party about their intentions or expectations.
+
+<ParamField path="question" type="str" required>
+  The question to ask the other party
+</ParamField>
+
+<ResponseField name="response" type="Dict[str, Any]">
+  Response containing:
+  - `success`: Boolean (true)
+  - `question`: The question asked
+  - `response`: "Response from the other party."
+</ResponseField>
+
+### `end_negotiation`
+
+End the negotiation without an agreement.
+
+<ResponseField name="response" type="Dict[str, Any]">
+  Response containing:
+  - `success`: Boolean (true)
+  - `message`: "Negotiation ended without agreement."
+</ResponseField>
+
+**Note:** This action sets `self.done = True` to terminate the simulation.
+
+## Usage Example
+
+```python
+from marble.environments.world_env import WorldSimulationEnvironment
+
+# Create environment
+config = {
+    "agents": [
+        {"id": "buyer", "role": "purchaser"},
+        {"id": "seller", "role": "vendor"}
+    ],
+    "task": "Negotiate the price of a used car"
+}
+
+env = WorldSimulationEnvironment(config=config)
+
+# Agent makes a price offer
+result = env.execute_action(
+    action="offer_price",
+    params={"price": 15000, "reason": "Based on market comparison"}
+)
+print(result["offered_price"])  # 15000
+
+# Agent provides supporting information
+result = env.execute_action(
+    action="provide_information",
+    params={
+        "info_type": "Vehicle History",
+        "details": "Clean title, single owner, full service records"
+    }
+)
+
+# Agent makes a counter offer
+result = env.execute_action(
+    action="reject_and_counter",
+    params={"counter_price": 13000, "reason": "Budget constraints"}
+)
+
+# Agent asks about intentions
+result = env.execute_action(
+    action="inquire_intentions",
+    params={"question": "What is your target price range?"}
+)
+
+# Accept the offer
+result = env.execute_action(action="accept_offer")
+print(env.done)  # True
+
+# Or end negotiation without agreement
+result = env.execute_action(action="end_negotiation")
+print(env.done)  # True
+```
+
+## Negotiation Flow Example
+
+```python
+# Initialize environment
+env = WorldSimulationEnvironment(config=negotiation_config)
+
+# Simulation loop
+while not env.done:
+    # Seller offers initial price
+    if step == 0:
+        result = env.execute_action(
+            "offer_price",
+            {"price": 18000, "reason": "Fair market value"}
+        )
+    
+    # Buyer provides counter
+    elif step == 1:
+        result = env.execute_action(
+            "reject_and_counter",
+            {"counter_price": 15000, "reason": "Budget constraint"}
+        )
+    
+    # Seller asks for more information
+    elif step == 2:
+        result = env.execute_action(
+            "inquire_intentions",
+            {"question": "Can you provide proof of budget limitation?"}
+        )
+    
+    # Buyer provides information
+    elif step == 3:
+        result = env.execute_action(
+            "provide_information",
+            {"info_type": "Financial", "details": "Pre-approved loan up to $15,500"}
+        )
+    
+    # Seller accepts
+    elif step == 4:
+        result = env.execute_action("accept_offer")
+    
+    step += 1
+
+print("Negotiation complete!")
+```
+
+## Extending the Environment
+
+You can extend `WorldSimulationEnvironment` to add custom actions:
+
+```python
+class CustomNegotiationEnv(WorldSimulationEnvironment):
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        
+        # Register custom action
+        self.register_action(
+            "request_inspection",
+            handler=self._inspection_handler,
+            description={
+                "type": "function",
+                "function": {
+                    "name": "request_inspection",
+                    "description": "Request professional inspection",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "inspection_type": {"type": "string"}
+                        },
+                        "required": ["inspection_type"]
+                    }
+                }
+            }
+        )
+    
+    def _inspection_handler(self, inspection_type: str) -> Dict[str, Any]:
+        return {
+            "success": True,
+            "inspection_type": inspection_type,
+            "results": "Inspection scheduled"
+        }
+```

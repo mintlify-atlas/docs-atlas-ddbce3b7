@@ -238,79 +238,55 @@ Tasks typically include these standard requirements:
 
 ## Running Coding Benchmarks
 
-### Load and Execute a Task
+### Convert JSONL to YAML Configuration
 
-```python
-import json
-from marble import CodingEnvironment, MultiAgentSystem
+First, convert the JSONL benchmark tasks to YAML format:
 
-# Load task
-with open('multiagentbench/coding/coding_main.jsonl') as f:
-    tasks = [json.loads(line) for line in f]
-
-task = tasks[0]  # First task
-
-# Initialize system
-mas = MultiAgentSystem(
-    agents=task['agents'],
-    environment=CodingEnvironment(
-        workspace_dir=task['environment']['workspace_dir'],
-        max_iterations=task['environment']['max_iterations']
-    ),
-    relationships=task['relationships']
-)
-
-# Run task
-result = mas.run(task['task']['content'])
-
-# Check results
-print(f"Task Completed: {result.success}")
-print(f"Files Created: {result.files}")
-print(f"Tests Passed: {result.tests_passed}/{result.total_tests}")
+```bash
+cd multiagentbench
+python jsonl2yaml.py \
+    --input_file coding/coding_main.jsonl \
+    --output_folder ../configs/coding \
+    --default_llm gpt-4o \
+    --default_coordinate_mode graph
 ```
 
-### Evaluate Code Quality
+### Run a Single Task
 
-```python
-from marble.benchmarks.coding import CodingEvaluator
-
-evaluator = CodingEvaluator()
-score = evaluator.evaluate(
-    code_files=result.files,
-    requirements=task['task']['content'],
-    test_results=result.test_results
-)
-
-print(f"Overall Score: {score.total:.2f}")
-print(f"Code Quality: {score.code_quality:.2f}")
-print(f"Functionality: {score.functionality:.2f}")
-print(f"Testing: {score.testing:.2f}")
-print(f"Collaboration: {score.collaboration:.2f}")
+```bash
+# Run with the main entry point
+python -m marble.main --config_path configs/coding/config_1.yaml
 ```
 
-### Run Full Benchmark Suite
+### Load and Execute Programmatically
 
 ```python
-from marble.benchmarks import BenchmarkRunner
+from marble.configs.config import Config
+from marble.engine.engine import Engine
 
-runner = BenchmarkRunner(
-    benchmark='coding',
-    model='gpt-4o',
-    num_tasks=100,
-    output_dir='results/coding'
-)
+# Load configuration
+config = Config.load('configs/coding/config_1.yaml')
 
-results = runner.run_all()
+# Initialize engine
+engine = Engine(config)
 
-# Generate report
-runner.generate_report(
-    results=results,
-    output_file='results/coding/report.html'
-)
+# Start simulation
+engine.start()
 
-print(f"Tasks Completed: {results.success_rate:.1%}")
-print(f"Average Score: {results.avg_score:.2f}")
-print(f"Average Iterations: {results.avg_iterations:.1f}")
+# Access results from engine.evaluator
+metrics = engine.evaluator.get_metrics()
+print(f"Task Completed: {metrics.get('task_completed', False)}")
+print(f"Token Usage: {metrics.get('total_tokens', 0)}")
+```
+
+### Run Multiple Benchmark Tasks
+
+```bash
+# Run all coding benchmarks
+for config in configs/coding/*.yaml; do
+    echo "Running $config"
+    python -m marble.main --config_path "$config"
+done
 ```
 
 ## Example Task Outputs

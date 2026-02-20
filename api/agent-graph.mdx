@@ -1,0 +1,232 @@
+---
+title: AgentGraph
+description: Network structure for agents with support for hierarchical and cooperative execution
+---
+
+## Overview
+
+The `AgentGraph` class represents the network structure of agents, managing their relationships and interactions. It supports different coordination modes such as hierarchical (tree) execution and cooperative communication.
+
+## Class Definition
+
+```python
+from marble.graph.agent_graph import AgentGraph
+from marble.configs.config import Config
+```
+
+## Constructor
+
+### `__init__(agents: Sequence[BaseAgent], structure_config: Config)`
+
+Initialize the AgentGraph with agents and structure configuration.
+
+<ParamField path="agents" type="Sequence[BaseAgent]" required>
+  List of agent instances to include in the graph
+</ParamField>
+
+<ParamField path="structure_config" type="Config" required>
+  Configuration defining the graph structure, including:
+  - `coordination_mode`: Execution mode ("parallel", "tree", "cooperative")
+  - `relationships`: List of relationship triples [node1, node2, relationship_type]
+</ParamField>
+
+**Attributes:**
+- `agents`: Dictionary mapping agent IDs to agent instances
+- `adjacency_list`: Graph represented as an adjacency list
+- `relationships`: List of relationships as tuples (source, target, type)
+- `coordination_mode`: The coordination mode for agent execution
+
+## CRUD Operations
+
+### `add_agent(agent: BaseAgent)`
+
+Add a new agent to the graph.
+
+<ParamField path="agent" type="BaseAgent" required>
+  The agent instance to add
+</ParamField>
+
+**Raises:**
+- `ValueError`: If agent_id already exists
+
+### `remove_agent(agent_id: str)`
+
+Remove an agent from the graph.
+
+<ParamField path="agent_id" type="str" required>
+  The ID of the agent to remove
+</ParamField>
+
+**Raises:**
+- `ValueError`: If agent_id does not exist
+
+### `update_agent(agent_id: str, **kwargs: Any)`
+
+Update an agent's configuration.
+
+<ParamField path="agent_id" type="str" required>
+  The ID of the agent to update
+</ParamField>
+
+<ParamField path="kwargs" type="Any">
+  Attributes to update on the agent
+</ParamField>
+
+**Raises:**
+- `ValueError`: If agent_id does not exist
+
+### `get_agent(agent_id: str) -> BaseAgent`
+
+Retrieve an agent by its ID.
+
+<ParamField path="agent_id" type="str" required>
+  The ID of the agent to retrieve
+</ParamField>
+
+<ResponseField name="BaseAgent" type="BaseAgent">
+  The requested agent instance
+</ResponseField>
+
+**Raises:**
+- `ValueError`: If agent_id does not exist
+
+## Relationship Management
+
+### `add_relationship(source: str, target: str, rel_type: str = "related_to")`
+
+Add a relationship between two agents.
+
+<ParamField path="source" type="str" required>
+  Source agent ID
+</ParamField>
+
+<ParamField path="target" type="str" required>
+  Target agent ID
+</ParamField>
+
+<ParamField path="rel_type" type="str" default="related_to">
+  Type of relationship (e.g., "parent", "peer", "collaborator")
+</ParamField>
+
+**Raises:**
+- `ValueError`: If either agent does not exist
+
+### `remove_relationship(source: str, target: str)`
+
+Remove a relationship between two agents.
+
+<ParamField path="source" type="str" required>
+  Source agent ID
+</ParamField>
+
+<ParamField path="target" type="str" required>
+  Target agent ID
+</ParamField>
+
+**Raises:**
+- `ValueError`: If the relationship does not exist
+
+### `update_relationship(source: str, target: str, new_type: str)`
+
+Update the type of a relationship between two agents.
+
+<ParamField path="source" type="str" required>
+  Source agent ID
+</ParamField>
+
+<ParamField path="target" type="str" required>
+  Target agent ID
+</ParamField>
+
+<ParamField path="new_type" type="str" required>
+  New relationship type
+</ParamField>
+
+**Raises:**
+- `ValueError`: If the relationship does not exist
+
+## Query Methods
+
+### `get_children(agent_id: str) -> List[BaseAgent]`
+
+Get the child agents of a given agent.
+
+<ParamField path="agent_id" type="str" required>
+  The ID of the agent
+</ParamField>
+
+<ResponseField name="children" type="List[BaseAgent]">
+  List of child agents
+</ResponseField>
+
+### `get_all_agents() -> List[BaseAgent]`
+
+Get all agents in the graph.
+
+<ResponseField name="agents" type="List[BaseAgent]">
+  List of all agents in the graph
+</ResponseField>
+
+### `get_agent_profiles() -> Dict[str, Dict[str, Any]]`
+
+Get profiles of all agents in the graph.
+
+<ResponseField name="profiles" type="Dict[str, Dict[str, Any]]">
+  Dictionary mapping agent IDs to their profiles, including:
+  - `agent_id`: The agent's unique identifier
+  - `relationships`: Agent's relationships with other agents
+  - `profile`: Agent's profile information
+</ResponseField>
+
+### `get_roots() -> List[BaseAgent]`
+
+Get the root agents (agents with no parents).
+
+<ResponseField name="roots" type="List[BaseAgent]">
+  List of root agent instances
+</ResponseField>
+
+### `get_root_agent() -> Optional[BaseAgent]`
+
+Get the single root agent (agent with no parents).
+
+<ResponseField name="root" type="Optional[BaseAgent]">
+  The root agent, or None if multiple or no roots are found
+</ResponseField>
+
+## Usage Example
+
+```python
+from marble.graph.agent_graph import AgentGraph
+from marble.agent.base_agent import BaseAgent
+from marble.configs.config import Config
+
+# Create agents
+agent1 = BaseAgent(agent_id="manager", role="coordinator")
+agent2 = BaseAgent(agent_id="researcher", role="analyst")
+agent3 = BaseAgent(agent_id="writer", role="documenter")
+
+# Load configuration
+config = Config.load("config.yaml")
+
+# Create agent graph
+graph = AgentGraph(
+    agents=[agent1, agent2, agent3],
+    structure_config=config
+)
+
+# Add relationships
+graph.add_relationship("manager", "researcher", "parent")
+graph.add_relationship("manager", "writer", "parent")
+
+# Query the graph
+root = graph.get_root_agent()
+children = graph.get_children("manager")
+all_profiles = graph.get_agent_profiles()
+
+# Update an agent
+graph.update_agent("researcher", max_iterations=50)
+
+# Get specific agent
+researcher = graph.get_agent("researcher")
+```

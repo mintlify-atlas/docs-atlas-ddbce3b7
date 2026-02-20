@@ -1,0 +1,113 @@
+---
+title: Config
+description: Configuration management class for loading and storing system configurations
+---
+
+## Overview
+
+The `Config` class provides a centralized way to load and manage MARBLE system configurations from YAML files. It stores all configuration data including environment settings, agent definitions, relationships, and execution parameters.
+
+## Class Definition
+
+```python
+from marble.configs.config import Config
+```
+
+## Constructor
+
+### `__init__(data: Dict[str, Any])`
+
+Initialize the Config with configuration data.
+
+<ParamField path="data" type="Dict[str, Any]" required>
+  Configuration data dictionary containing system settings
+</ParamField>
+
+**Attributes:**
+- `environment`: Environment configuration settings
+- `relationships`: List of agent relationships
+- `agents`: List of agent configurations
+- `metrics`: Metrics configuration
+- `llm`: Language model identifier
+- `tools`: Tools configuration
+- `logger`: Logger configuration
+- `parallel`: Parallel execution settings
+- `graph`: Agent graph configuration
+- `memory`: Memory system configuration
+- `engine_planner`: Engine planner settings
+- `task`: Task configuration dictionary
+- `coordination_mode`: Coordination mode (e.g., "centralized")
+- `output`: Output configuration
+
+## Methods
+
+### `load(file_path: str) -> Config`
+
+Load configuration from a YAML file.
+
+<ParamField path="file_path" type="str" required>
+  Path to the YAML configuration file
+</ParamField>
+
+<ResponseField name="Config" type="Config">
+  An instance of the Config class with loaded settings
+</ResponseField>
+
+**Raises:**
+- `FileNotFoundError`: If the configuration file is not found
+- `yaml.YAMLError`: If there is an error parsing the YAML file
+
+## Usage Example
+
+```python
+from marble.configs.config import Config
+
+# Load configuration from YAML file
+config = Config.load("config.yaml")
+
+# Access configuration attributes
+print(config.coordination_mode)
+print(config.agents)
+print(config.llm)
+
+# Create config from dictionary
+config_data = {
+    "environment": {"name": "simulation"},
+    "agents": [{"id": "agent1", "role": "researcher"}],
+    "llm": "gpt-4",
+    "coordinate_mode": "centralized"
+}
+config = Config(config_data)
+```
+
+## Configuration File Example
+
+```yaml
+coordinate_mode: centralized
+llm: gpt-4
+
+environment:
+  name: simulation
+  max_steps: 100
+
+agents:
+  - id: agent1
+    role: researcher
+  - id: agent2
+    role: analyst
+
+relationships:
+  - [agent1, agent2, parent]
+
+memory:
+  type: long_term
+  enabled: true
+
+engine_planner:
+  method: naive
+  max_iterations: 10
+
+output:
+  format: json
+  path: ./results
+```

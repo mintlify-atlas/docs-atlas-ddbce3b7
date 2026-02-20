@@ -437,20 +437,6 @@ bargain_env = BargainingEnvironment(
 )
 
 # Create multi-agent system
-mas = MultiAgentSystem(
-    agents=task['agents'],
-    environment=bargain_env,
-    relationships=task['relationships']
-)
-
-# Run negotiation
-result = mas.run(task['task']['content'])
-
-print(f"Deal Reached: {result.agreement}")
-if result.agreement:
-    print(f"Final Price: ${result.terms['price']:.2f}")
-    print(f"Iterations: {result.iterations}")
-```
 
 ### Evaluate Negotiation
 
@@ -477,22 +463,6 @@ print(f"Overall Score: {scores.overall:.2f}")
 ### Batch Evaluation
 
 ```python
-from marble.benchmarks import BenchmarkRunner
-
-runner = BenchmarkRunner(
-    benchmark='bargaining',
-    model='gpt-4o',
-    num_tasks=100,
-    output_dir='results/bargaining'
-)
-
-results = runner.run_all()
-
-print(f"Agreement Rate: {results.agreement_rate:.1%}")
-print(f"Avg Final Price: ${results.avg_price:.2f}")
-print(f"Avg Iterations: {results.avg_iterations:.1f}")
-print(f"Avg Satisfaction: {results.avg_satisfaction:.2f}")
-```
 
 ## Example Negotiation
 

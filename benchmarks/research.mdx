@@ -307,22 +307,6 @@ with open('multiagentbench/research/research_main.jsonl') as f:
 task = tasks[0]
 
 # Initialize research collaboration
-mas = MultiAgentSystem(
-    agents=task['agents'],
-    environment=ResearchEnvironment(
-        max_iterations=task['environment']['max_iterations']
-    ),
-    relationships=task['relationships']
-)
-
-# Run ideation
-result = mas.run()
-
-# Extract research idea
-print(f"Research Idea: {result.idea['title']}")
-print(f"Novelty Score: {result.scores['novelty']:.2f}")
-print(f"Feasibility Score: {result.scores['feasibility']:.2f}")
-```
 
 ### Evaluate Research Quality
 
@@ -347,22 +331,6 @@ print(f"Overall: {scores.overall:.2f}")
 ### Batch Evaluation
 
 ```python
-from marble.benchmarks import BenchmarkRunner
-
-runner = BenchmarkRunner(
-    benchmark='research',
-    model='gpt-4o',
-    num_tasks=100,
-    output_dir='results/research'
-)
-
-results = runner.run_all()
-
-# Analyze results
-print(f"Average Novelty: {results.avg_novelty:.2f}")
-print(f"Average Feasibility: {results.avg_feasibility:.2f}")
-print(f"Collaboration Quality: {results.avg_diversity:.2f}")
-```
 
 ## Example Research Outputs
 

@@ -462,22 +462,6 @@ db_env = DatabaseEnvironment(
 )
 
 # Create multi-agent system
-mas = MultiAgentSystem(
-    agents=task['agents'],
-    environment=db_env,
-    relationships=task['relationships']
-)
-
-# Run query generation
-result = mas.run(task['task']['content'])
-
-# Execute generated query
-query_result = db_env.execute_query(result.query)
-
-print(f"Query: {result.query}")
-print(f"Rows Returned: {len(query_result)}")
-print(f"Execution Time: {query_result.execution_time}ms")
-```
 
 ### Evaluate Query Quality
 
@@ -501,21 +485,6 @@ print(f"Overall Score: {scores.overall:.2f}")
 ### Batch Evaluation
 
 ```python
-from marble.benchmarks import BenchmarkRunner
-
-runner = BenchmarkRunner(
-    benchmark='database',
-    model='gpt-4o',
-    num_tasks=100,
-    output_dir='results/database'
-)
-
-results = runner.run_all()
-
-print(f"Success Rate: {results.success_rate:.1%}")
-print(f"Avg Query Time: {results.avg_execution_time:.0f}ms")
-print(f"Avg Score: {results.avg_score:.2f}")
-```
 
 ## Example Query Generation
 
