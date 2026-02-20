@@ -1,0 +1,154 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "MARBLE",
+  "projectDescription": "A modular framework for evaluating collaboration and competition of LLM-powered multi-agent systems across diverse benchmarks.",
+  "theme": "aspen",
+  "primaryColor": "#7C3AED",
+  "lightColor": "#A78BFA",
+  "darkColor": "#5B21B6",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/agents",
+              "concepts/environments",
+              "concepts/engine",
+              "concepts/memory",
+              "concepts/evaluation"
+            ]
+          },
+          {
+            "group": "Environments",
+            "pages": [
+              "environments/overview",
+              "environments/werewolf",
+              "environments/research",
+              "environments/coding",
+              "environments/database",
+              "environments/minecraft",
+              "environments/web"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/overview",
+              "configuration/agents",
+              "configuration/environments",
+              "configuration/coordination"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/running-simulations",
+              "guides/creating-agents",
+              "guides/custom-environments",
+              "guides/evaluation-metrics"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core",
+            "pages": [
+              "api/engine",
+              "api/base-agent",
+              "api/base-environment"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "api/agents/base-agent",
+              "api/agents/werewolf-agent"
+            ]
+          },
+          {
+            "group": "Environments",
+            "pages": [
+              "api/environments/base-env",
+              "api/environments/coding-env",
+              "api/environments/research-env",
+              "api/environments/db-env",
+              "api/environments/werewolf-env"
+            ]
+          },
+          {
+            "group": "Memory",
+            "pages": [
+              "api/memory/base-memory",
+              "api/memory/shared-memory"
+            ]
+          },
+          {
+            "group": "Evaluation",
+            "pages": [
+              "api/evaluator"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Benchmarks",
+        "groups": [
+          {
+            "group": "MultiAgentBench",
+            "pages": [
+              "benchmarks/overview",
+              "benchmarks/coding",
+              "benchmarks/research",
+              "benchmarks/database",
+              "benchmarks/minecraft",
+              "benchmarks/bargaining"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Modular multi-agent framework with pluggable components",
+    "LLM-powered agents with configurable reasoning strategies (CoT, ReAct, Reflexion)",
+    "Multiple simulation environments (Werewolf, Research, Coding, Database, Minecraft, Web)",
+    "Agent coordination via graph-based relationships",
+    "Shared and distributed memory systems",
+    "Comprehensive evaluation metrics for collaboration and competition",
+    "Support for hierarchical and cooperative agent execution modes",
+    "Integration with multiple LLM providers via LiteLLM",
+    "Built-in benchmark suite (MultiAgentBench) with 100+ tasks"
+  ],
+  "publicApiSurface": [
+    "marble.engine.Engine",
+    "marble.agent.BaseAgent",
+    "marble.environments.BaseEnvironment",
+    "marble.environments.CodingEnvironment",
+    "marble.environments.ResearchEnvironment",
+    "marble.environments.DBEnvironment",
+    "marble.environments.WerewolfEnvironment",
+    "marble.environments.MinecraftEnvironment",
+    "marble.environments.WebEnvironment",
+    "marble.memory.BaseMemory",
+    "marble.memory.SharedMemory",
+    "marble.graph.AgentGraph",
+    "marble.evaluator.Evaluator",
+    "marble.configs.Config",
+    "marble.llms.model_prompting"
+  ]
+}
