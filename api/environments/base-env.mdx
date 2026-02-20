@@ -1,0 +1,287 @@
+---
+title: "BaseEnvironment"
+description: "Base class for all MARBLE environments providing core functionality for agent interaction and action management"
+---
+
+## Overview
+
+`BaseEnvironment` is the foundational class for all environments in MARBLE. It provides the core functionality for managing agents, tracking state, registering action handlers, and controlling the environment lifecycle.
+
+## Class Definition
+
+```python
+class BaseEnvironment:
+    def __init__(self, name: str, config: Dict[str, Any])
+```
+
+## Constructor
+
+### `__init__(name, config)`
+
+Initialize a new environment instance.
+
+<ParamField path="name" type="str" required>
+  The name of the environment
+</ParamField>
+
+<ParamField path="config" type="Dict[str, Any]" required>
+  Configuration dictionary for the environment. Supports the following keys:
+  - `description`: Environment description
+  - `task_description`: Specific task for agents to complete
+  - `ground_truth`: Expected result for task validation
+  - `max_iterations`: Maximum number of iterations (default: 10)
+</ParamField>
+
+### Example
+
+```python
+from marble.environments.base_env import BaseEnvironment
+
+config = {
+    "description": "Basic environment for agent testing",
+    "task_description": "Complete the assigned task",
+    "ground_truth": "expected result",
+    "max_iterations": 20
+}
+
+env = BaseEnvironment(name="test_env", config=config)
+```
+
+## Properties
+
+<ResponseField name="name" type="str">
+  The name of the environment
+</ResponseField>
+
+<ResponseField name="agents" type="List[Any]">
+  List of agents registered in the environment
+</ResponseField>
+
+<ResponseField name="state" type="Dict[str, Any]">
+  Current state of the environment, including task description and action results
+</ResponseField>
+
+<ResponseField name="done" type="bool">
+  Whether the environment has completed execution
+</ResponseField>
+
+<ResponseField name="description" type="str">
+  Description of the environment
+</ResponseField>
+
+<ResponseField name="task_description" type="str">
+  Description of the task to be completed
+</ResponseField>
+
+<ResponseField name="ground_truth" type="str">
+  Expected result for task validation
+</ResponseField>
+
+<ResponseField name="max_iterations" type="int">
+  Maximum number of iterations allowed
+</ResponseField>
+
+<ResponseField name="current_iteration" type="int">
+  Current iteration count
+</ResponseField>
+
+<ResponseField name="action_handler_descriptions" type="Dict[str, Any]">
+  Descriptions of registered actions in OpenAI function calling format
+</ResponseField>
+
+## Methods
+
+### `is_done()`
+
+Check if the environment has completed execution.
+
+```python
+def is_done(self) -> bool
+```
+
+<ResponseField name="return" type="bool">
+  True if the environment is done, False otherwise
+</ResponseField>
+
+### `is_task_completed()`
+
+Check if the task has been completed successfully by comparing results to ground truth.
+
+```python
+def is_task_completed(self) -> bool
+```
+
+<ResponseField name="return" type="bool">
+  True if task is completed successfully, False otherwise
+</ResponseField>
+
+### `get_description()`
+
+Get the environment description.
+
+```python
+def get_description(self) -> str
+```
+
+<ResponseField name="return" type="str">
+  The environment description
+</ResponseField>
+
+### `register_action(action_name, handler, description)`
+
+Register an action handler that agents can invoke.
+
+```python
+def register_action(
+    self,
+    action_name: str,
+    handler: Callable[..., Dict[str, Any]],
+    description: Dict[str, Any]
+) -> None
+```
+
+<ParamField path="action_name" type="str" required>
+  Name of the action to register
+</ParamField>
+
+<ParamField path="handler" type="Callable[..., Dict[str, Any]]" required>
+  Function that handles the action execution. Must return a dictionary with action results.
+</ParamField>
+
+<ParamField path="description" type="Dict[str, Any]" required>
+  Action description in OpenAI function calling format, including:
+  - `type`: Always "function"
+  - `function`: Object with `name`, `description`, and `parameters`
+</ParamField>
+
+#### Example
+
+```python
+def my_action_handler(param1: str, param2: int) -> Dict[str, Any]:
+    return {"success": True, "result": f"Processed {param1} with {param2}"}
+
+env.register_action(
+    action_name="my_action",
+    handler=my_action_handler,
+    description={
+        "type": "function",
+        "function": {
+            "name": "my_action",
+            "description": "Performs a custom action",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "param1": {"type": "string", "description": "First parameter"},
+                    "param2": {"type": "integer", "description": "Second parameter"}
+                },
+                "required": ["param1", "param2"]
+            }
+        }
+    }
+)
+```
+
+### `apply_action(agent_id, action_name, arguments)`
+
+Execute a registered action in the environment.
+
+```python
+def apply_action(
+    self,
+    agent_id: Union[str, None],
+    action_name: str,
+    arguments: Dict[str, Any]
+) -> Dict[str, Any]
+```
+
+<ParamField path="agent_id" type="Union[str, None]" required>
+  ID of the agent performing the action
+</ParamField>
+
+<ParamField path="action_name" type="str" required>
+  Name of the action to execute
+</ParamField>
+
+<ParamField path="arguments" type="Dict[str, Any]" required>
+  Arguments to pass to the action handler
+</ParamField>
+
+<ResponseField name="return" type="Dict[str, Any]">
+  Result dictionary from the action handler execution
+</ResponseField>
+
+#### Example
+
+```python
+result = env.apply_action(
+    agent_id="agent_1",
+    action_name="my_action",
+    arguments={"param1": "test", "param2": 42}
+)
+print(result)  # {"success": True, "result": "Processed test with 42"}
+```
+
+### `get_state()`
+
+Get a copy of the current environment state.
+
+```python
+def get_state(self) -> Dict[str, Any]
+```
+
+<ResponseField name="return" type="Dict[str, Any]">
+  Copy of the current environment state dictionary
+</ResponseField>
+
+## Lifecycle Management
+
+The BaseEnvironment automatically tracks iterations and manages the done state:
+
+1. Each call to `apply_action()` increments `current_iteration`
+2. When `current_iteration` reaches `max_iterations`, `done` is set to True
+3. The last action result is stored in `state["last_action_result"]`
+4. Use `is_done()` to check if the environment should terminate
+
+## Extending BaseEnvironment
+
+To create a custom environment, inherit from BaseEnvironment and register your actions:
+
+```python
+from marble.environments.base_env import BaseEnvironment
+from typing import Dict, Any
+
+class MyCustomEnvironment(BaseEnvironment):
+    def __init__(self, config: Dict[str, Any], name: str = "MyEnv"):
+        super().__init__(name, config)
+        self.register_custom_actions()
+    
+    def register_custom_actions(self):
+        self.register_action(
+            "custom_action",
+            handler=self._custom_action_handler,
+            description={
+                "type": "function",
+                "function": {
+                    "name": "custom_action",
+                    "description": "Performs a custom operation",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "input": {"type": "string"}
+                        },
+                        "required": ["input"]
+                    }
+                }
+            }
+        )
+    
+    def _custom_action_handler(self, input: str) -> Dict[str, Any]:
+        return {"success": True, "output": input.upper()}
+```
+
+## See Also
+
+- [CodingEnvironment](/api/environments/coding-env) - Environment for code generation tasks
+- [ResearchEnvironment](/api/environments/research-env) - Environment for research and paper retrieval
+- [DBEnvironment](/api/environments/db-env) - Environment for database diagnostics
+- [WerewolfEnvironment](/api/environments/werewolf-env) - Environment for social deduction games

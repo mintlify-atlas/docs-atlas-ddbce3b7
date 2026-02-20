@@ -1,0 +1,382 @@
+---
+title: Environment Configuration
+description: Configure execution environments and available tools for agents
+---
+
+Environments define the execution context where agents operate. Each environment type provides specific tools, actions, and state management for different task domains.
+
+## Environment Configuration
+
+<ParamField path="type" type="string" required>
+  The environment class to instantiate. Available types:
+  - `Base`: General-purpose environment for discussions and reasoning
+  - `Web`: Web research with search engine tools
+  - `Coding`: Software development with file operations
+  - `Research`: Academic research with paper databases
+  - `Minecraft`: Game environment for Minecraft agents
+  - `DB`: Database query and analysis environment
+  - `World`: Simulation environment for world modeling
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Human-readable name for the environment.
+  
+  **Example**: `"Web Simulation Environment"`, `"Coding Environment"`
+</ParamField>
+
+<ParamField path="max_iterations" type="integer">
+  Maximum number of iterations before the environment terminates.
+  
+  **Default**: `10`
+</ParamField>
+
+<ParamField path="description" type="string">
+  Detailed description of the environment's purpose and capabilities.
+</ParamField>
+
+<ParamField path="task_description" type="string">
+  Specific task description provided to agents in this environment.
+</ParamField>
+
+<ParamField path="ground_truth" type="string">
+  Expected output for task validation and evaluation.
+</ParamField>
+
+## Base Environment
+
+General-purpose environment for discussions, reasoning, and coordination:
+
+```yaml
+environment:
+  type: Base
+  name: "Discussion Simulation Environment"
+  max_iterations: 3
+  description: "A collaborative discussion environment for multi-agent conversations"
+```
+
+**Use cases**:
+- Group discussions and debates
+- Collaborative problem-solving
+- Opinion synthesis
+- Strategic planning
+
+**Available actions**:
+- Communication between agents
+- Memory access and sharing
+- Basic reasoning and analysis
+
+## Web Environment
+
+Web research environment with search engine integration:
+
+```yaml
+environment:
+  type: Web
+  name: "Web Simulation Environment"
+  max_iterations: 5
+  description: "Environment for web research and information gathering"
+```
+
+**Use cases**:
+- Information retrieval
+- News gathering
+- Fact-checking
+- Trend analysis
+
+**Available actions**:
+- Search engines (Google, Bing, Wikipedia, Twitter)
+- Web page retrieval
+- Content summarization
+
+**Example with Web Environment**:
+
+```yaml
+coordinate_mode: star
+
+environment:
+  type: Web
+  name: "Web Simulation Environment"
+  max_iterations: 5
+
+task:
+  content: "Find news about the latest trends in AI and share them."
+
+agents:
+  - type: BaseAgent
+    agent_id: agent1
+    profile: |
+      You are a team leader who coordinates research efforts.
+      You do not use the internet directly.
+
+  - type: BaseAgent
+    agent_id: agent2
+    profile: "You are a researcher who uses Google to search for information."
+
+  - type: BaseAgent
+    agent_id: agent3
+    profile: "You are a researcher who uses Wikipedia to search for information."
+
+  - type: BaseAgent
+    agent_id: agent4
+    profile: "You are a researcher who uses Twitter to track trending topics."
+```
+
+## Coding Environment
+
+Software development environment with file operations and code execution:
+
+<ParamField path="workspace_dir" type="string">
+  Directory where code files will be created and managed.
+  
+  **Default**: `"workspace"`
+</ParamField>
+
+```yaml
+environment:
+  type: Coding
+  name: "Coding Environment"
+  workspace_dir: "workspace"
+  max_iterations: 5
+```
+
+**Use cases**:
+- Software development
+- Code review and refactoring
+- Test generation
+- Bug fixing
+
+**Available actions**:
+- `create_code`: Create new code files
+- `give_advice_and_revise_code`: Review and modify code
+- `read_file`: Read file contents
+- `list_files`: List workspace files
+- `execute_code`: Run code (if configured)
+
+**Complete Coding Example**:
+
+```yaml
+coordinate_mode: graph
+
+relationships:
+  - [developer, reviewer, "collaborates with"]
+  - [reviewer, developer, "collaborates with"]
+
+environment:
+  type: Coding
+  name: "Coding Environment"
+  workspace_dir: "workspace"
+  max_iterations: 5
+
+task:
+  content: |
+    Software Development Task:
+    
+    Create a Python program that implements a task scheduler with priority queue.
+    
+    Requirements:
+    - Priority-based task execution
+    - Support for task dependencies
+    - Task status tracking
+    - Comprehensive unit tests
+    
+    Project structure:
+    - solution.py (main implementation)
+    
+    Development process:
+    - Developer: Create the code framework
+    - Reviewer: Review and optimize
+  
+  output_format: |
+    The final deliverable should include:
+    solution.py
+
+agents:
+  - type: CodingAgent
+    agent_id: developer
+    profile: |
+      I am a Python developer who creates initial code implementations.
+      I call "create_code" action to write the initial solution.
+
+  - type: CodingAgent
+    agent_id: reviewer
+    profile: |
+      I am a code reviewer who improves code quality.
+      I call "give_advice_and_revise_code" to refine implementations.
+
+memory:
+  type: SharedMemory
+
+metrics:
+  evaluate_llm: "gpt-4o-mini"
+  code_quality: true
+  test_coverage: true
+
+engine_planner:
+  initial_progress: "Starting software development."
+
+output:
+  format: jsonl
+  file_path: "result/development_output.jsonl"
+```
+
+## Research Environment
+
+Academic research environment with paper databases:
+
+```yaml
+environment:
+  type: Research
+  name: "Research Environment"
+  max_iterations: 10
+  description: "Environment for academic research and literature review"
+```
+
+**Use cases**:
+- Literature reviews
+- Research paper analysis
+- Citation tracking
+- Academic writing
+
+**Available actions**:
+- Search academic databases
+- Retrieve paper abstracts
+- Analyze citations
+- Summarize research findings
+
+## Minecraft Environment
+
+Game environment for Minecraft task automation:
+
+```yaml
+environment:
+  type: Minecraft
+  name: "Minecraft Environment"
+  max_iterations: 100
+  description: "Environment for Minecraft gameplay and automation"
+```
+
+**Use cases**:
+- Gameplay automation
+- Resource gathering
+- Building tasks
+- Multiplayer coordination
+
+## Database Environment
+
+Database query and analysis environment:
+
+```yaml
+environment:
+  type: DB
+  name: "Database Environment"
+  max_iterations: 5
+  description: "Environment for database operations and analysis"
+```
+
+**Use cases**:
+- SQL query generation
+- Database schema analysis
+- Data validation
+- Report generation
+
+**Available actions**:
+- Execute SQL queries
+- Schema introspection
+- Data validation
+- Result formatting
+
+## Environment State Management
+
+All environments maintain internal state:
+
+```python
+class BaseEnvironment:
+    def __init__(self, name: str, config: Dict[str, Any]):
+        self.name = name
+        self.agents: List[Any] = []
+        self.state: Dict[str, Any] = {}
+        self.done = False
+        self.max_iterations: int = config.get("max_iterations", 10)
+        self.current_iteration: int = 0
+```
+
+### State Properties
+
+- `state`: Dictionary storing current environment state
+- `done`: Boolean indicating if environment has terminated
+- `current_iteration`: Current iteration count
+- `max_iterations`: Maximum allowed iterations
+
+### State Access
+
+Agents can access environment state during execution:
+
+```python
+# Get current state
+current_state = environment.get_state()
+
+# Check if environment is done
+if environment.is_done():
+    print("Environment has terminated")
+```
+
+## Custom Actions
+
+Environments can register custom actions:
+
+```python
+from marble.environments.base_env import BaseEnvironment
+
+class CustomEnvironment(BaseEnvironment):
+    def __init__(self, config):
+        super().__init__("Custom", config)
+        self.register_custom_actions()
+    
+    def register_custom_actions(self):
+        # Register custom action
+        self.register_action(
+            action_name="custom_action",
+            handler=self.handle_custom_action,
+            description={
+                "type": "function",
+                "function": {
+                    "name": "custom_action",
+                    "description": "Performs a custom operation",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "param1": {"type": "string", "description": "Parameter 1"}
+                        },
+                        "required": ["param1"]
+                    }
+                }
+            }
+        )
+    
+    def handle_custom_action(self, param1: str) -> Dict[str, Any]:
+        # Custom action implementation
+        return {"result": f"Processed {param1}"}
+```
+
+<Warning>
+  **Iteration Limits**: Always set appropriate `max_iterations` to prevent infinite loops. The environment automatically terminates when the limit is reached.
+</Warning>
+
+## Best Practices
+
+1. **Choose the Right Environment**: Match environment type to your task domain
+2. **Set Iteration Limits**: Configure `max_iterations` based on task complexity
+3. **Provide Context**: Use `description` and `task_description` to guide agents
+4. **Monitor State**: Track environment state for debugging and evaluation
+5. **Workspace Organization**: For Coding environments, use clear workspace directory structures
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Coordination Modes" icon="diagram-project" href="./coordination">
+    Configure how agents interact and coordinate within environments
+  </Card>
+  <Card title="Agent Configuration" icon="users" href="./agents">
+    Configure agents to work effectively in your environment
+  </Card>
+</CardGroup>

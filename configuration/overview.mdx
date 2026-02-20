@@ -1,0 +1,144 @@
+---
+title: Configuration Overview
+description: Understanding MARBLE's YAML-based configuration system
+---
+
+MARBLE uses YAML configuration files to define multi-agent systems. Each configuration file specifies agents, environments, coordination modes, memory systems, and evaluation metrics.
+
+## Configuration Structure
+
+A MARBLE configuration file consists of these key sections:
+
+<ParamField path="coordinate_mode" type="string" required>
+  Defines how agents interact with each other. Options:
+  - `graph`: Agents collaborate in a network with bidirectional relationships
+  - `star`: Centralized coordination with a hub agent
+  - `chain`: Sequential processing where agents work one after another
+  - `tree`: Hierarchical structure with parent-child relationships
+</ParamField>
+
+<ParamField path="relationships" type="array" required>
+  Defines connections between agents as `[agent1, agent2, "relationship_type"]`. Common types:
+  - `collaborates with`: Peer-to-peer collaboration
+  - `reports_to`: Hierarchical reporting
+  - `parent`: Tree structure parent-child
+  - `manages`, `supports`: Custom relationships
+</ParamField>
+
+<ParamField path="environment" type="object" required>
+  Configuration for the execution environment where agents operate.
+</ParamField>
+
+<ParamField path="task" type="object" required>
+  The task description and requirements that agents will work on.
+</ParamField>
+
+<ParamField path="agents" type="array" required>
+  List of agent configurations defining their types, IDs, and profiles.
+</ParamField>
+
+<ParamField path="memory" type="object">
+  Memory system configuration for agent information sharing.
+</ParamField>
+
+<ParamField path="metrics" type="object">
+  Evaluation metrics to assess agent performance and collaboration.
+</ParamField>
+
+<ParamField path="llm" type="string">
+  Default language model for all agents (e.g., `"gpt-3.5-turbo"`, `"gpt-4o-mini"`).
+</ParamField>
+
+<ParamField path="engine_planner" type="object">
+  Engine and planner configuration for orchestrating agent execution.
+</ParamField>
+
+<ParamField path="output" type="object">
+  Output configuration for saving results.
+</ParamField>
+
+## Configuration Files Location
+
+Configuration files are located in `marble/configs/`:
+
+```
+marble/configs/
+├── config.py              # Config class implementation
+├── prompt_config.yaml     # Reasoning strategy prompts
+├── coding_configs/        # Software development configurations
+├── test_config/          # Test and simulation configs
+└── test_config_*.yaml    # Various test scenarios
+```
+
+## Basic Example
+
+Here's a minimal configuration for a collaborative web research task:
+
+```yaml
+coordinate_mode: chain
+
+relationships:
+  - [agent1, agent2, "reports_to"]
+  - [agent1, agent3, "manages"]
+
+environment:
+  type: Web
+  name: "Web Simulation Environment"
+  max_iterations: 5
+
+task:
+  content: "Find news about the latest trends in AI and have agent1 summarize it."
+
+agents:
+  - type: BaseAgent
+    agent_id: agent1
+    profile: "You are a helpful team leader who summarizes information."
+
+  - type: BaseAgent
+    agent_id: agent2
+    profile: "You are a researcher who uses Bing to find information."
+
+  - type: BaseAgent
+    agent_id: agent3
+    profile: "You are a researcher who uses Google to find information."
+
+memory:
+  type: SharedMemory
+
+engine_planner:
+  initial_progress: "Starting the simulation."
+```
+
+## Loading Configuration
+
+Configurations are loaded using the `Config` class:
+
+```python
+from marble.configs.config import Config
+
+# Load configuration from YAML file
+config = Config.load("marble/configs/test_config.yaml")
+
+# Access configuration properties
+print(config.coordination_mode)  # 'chain'
+print(config.agents)             # List of agent configs
+print(config.environment)        # Environment config dict
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Agent Configuration" icon="users" href="./agents">
+    Configure individual agents with profiles, strategies, and capabilities
+  </Card>
+  <Card title="Environments" icon="cube" href="./environments">
+    Set up execution environments for different task types
+  </Card>
+  <Card title="Coordination Modes" icon="diagram-project" href="./coordination">
+    Learn about different coordination patterns and relationships
+  </Card>
+</CardGroup>
+
+<Warning>
+  **Configuration Validation**: MARBLE validates configurations at load time. Ensure all referenced agents exist in relationships, and coordination modes match the relationship structure (e.g., tree mode requires parent relationships).
+</Warning>

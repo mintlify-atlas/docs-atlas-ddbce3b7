@@ -1,0 +1,452 @@
+---
+title: 'Environment System'
+description: 'Understand how environments provide context and actions for agents'
+icon: 'globe'
+---
+
+## Overview
+
+Environments in MARBLE provide the execution context for agents. They define the world state, available actions, and feedback mechanisms that agents use to complete tasks.
+
+## Environment Architecture
+
+```
+┌───────────────────────────────────────────┐
+│         BaseEnvironment                   │
+│                                           │
+│  ┌─────────────────────────────────────┐ │
+│  │      Environment State              │ │
+│  │  - task_description                 │ │
+│  │  - current_iteration                │ │
+│  │  - last_action_result               │ │
+│  │  - domain-specific state            │ │
+│  └─────────────────────────────────────┘ │
+│                                           │
+│  ┌─────────────────────────────────────┐ │
+│  │      Action Registry                │ │
+│  │  - action_handlers                  │ │
+│  │  - action_descriptions (OpenAI)     │ │
+│  │  - argument schemas                 │ │
+│  └─────────────────────────────────────┘ │
+│                                           │
+│  ┌─────────────────────────────────────┐ │
+│  │      Lifecycle Management           │ │
+│  │  - is_done()                        │ │
+│  │  - is_task_completed()              │ │
+│  │  - apply_action()                   │ │
+│  └─────────────────────────────────────┘ │
+└───────────────────────────────────────────┘
+```
+
+## BaseEnvironment Class
+
+The `BaseEnvironment` provides the foundation for all environment types:
+
+```python marble/environments/base_env.py
+class BaseEnvironment:
+    def __init__(self, name: str, config: Dict[str, Any]):
+        """
+        Initialize the environment.
+        
+        Args:
+            name (str): The name of the environment.
+            config (Dict[str, Any]): Configuration for the environment.
+        """
+        self.name = name
+        self.agents: List[Any] = []
+        self.state: Dict[str, Any] = {}
+        self._action_handlers: Dict[str, Callable[..., Dict[str, Any]]] = {}
+        self.action_handler_descriptions: Dict[str, Any] = {}
+        self.done = False
+        self.description: str = config.get("description", "")
+        self.task_description: str = config.get("task_description", "")
+        self.ground_truth: str = config.get("ground_truth", "")
+        self.max_iterations: int = config.get("max_iterations", 10)
+        self.current_iteration: int = 0
+        
+        # Initialize state with task description
+        self.state["task_description"] = self.task_description
+```
+
+See [marble/environments/base_env.py:8-31](/home/daytona/workspace/source/marble/environments/base_env.py#L8-L31)
+
+## Action System
+
+### Registering Actions
+
+Environments expose actions to agents through a registration system:
+
+```python
+def register_action(
+    self,
+    action_name: str,
+    handler: Callable[..., Dict[str, Any]],
+    description: Dict[str, Any],
+) -> None:
+    """
+    Register an action handler for the environment.
+    
+    Args:
+        action_name (str): The name of the action.
+        handler (Callable): The handler function for the action.
+        description (dict): Description of action (OpenAI function calling format).
+    """
+    self._action_handlers[action_name] = handler
+    self.action_handler_descriptions[action_name] = description
+```
+
+See [marble/environments/base_env.py:53-68](/home/daytona/workspace/source/marble/environments/base_env.py#L53-L68)
+
+<Info>
+  Action descriptions follow the **OpenAI function calling format**, making them directly compatible with LLM tool use capabilities.
+</Info>
+
+### Executing Actions
+
+When an agent calls an action, the environment executes it and updates state:
+
+```python
+def apply_action(
+    self, agent_id: Union[str, None], action_name: str, arguments: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Execute an action in the environment.
+    
+    Args:
+        agent_id (str): The ID of the agent performing the action.
+        action_name (str): The action to execute.
+        arguments (dict): Arguments for the action handler.
+        
+    Returns:
+        Dict[str, Any]: The action result.
+    """
+    # Execute the action
+    action_result = self._action_handlers[action_name](**arguments)
+    
+    # Update state with the action result
+    self.state["last_action_result"] = action_result
+    
+    # Increment iteration count
+    self.current_iteration += 1
+    if self.current_iteration >= self.max_iterations:
+        self.done = True
+    
+    return action_result
+```
+
+See [marble/environments/base_env.py:70-92](/home/daytona/workspace/source/marble/environments/base_env.py#L70-L92)
+
+## Environment State Management
+
+Environments maintain state that agents can query:
+
+```python
+def get_state(self) -> Dict[str, Any]:
+    """
+    Get the current environment state.
+    
+    Returns:
+        Dict[str, Any]: The current environment state.
+    """
+    return self.state.copy()
+
+def is_done(self) -> bool:
+    """Check if environment has reached terminal state."""
+    return self.done
+
+def is_task_completed(self) -> bool:
+    """Compare agent's actions to ground truth."""
+    last_action_result = self.state.get("last_action_result", "")
+    return self._compare_to_ground_truth(last_action_result, self.ground_truth)
+```
+
+See [marble/environments/base_env.py:33-48](/home/daytona/workspace/source/marble/environments/base_env.py#L33-L48) and [marble/environments/base_env.py:94-101](/home/daytona/workspace/source/marble/environments/base_env.py#L94-L101)
+
+## Built-in Environment Types
+
+MARBLE includes several specialized environments:
+
+### Web Environment
+
+For web browsing and information retrieval tasks:
+
+```python
+class WebEnvironment(BaseEnvironment):
+    def __init__(self, name: str, config: Dict[str, Any]):
+        super().__init__(name, config)
+        # Register web-specific actions
+        self.register_action(
+            "search_web",
+            self._search_web_handler,
+            web_search_description
+        )
+```
+
+**Available Actions**:
+- `search_web`: Search the internet
+- `navigate_to_url`: Visit a URL
+- `extract_content`: Extract page content
+
+### Coding Environment
+
+For software development tasks:
+
+```python
+class CodingEnvironment(BaseEnvironment):
+    def __init__(self, name: str, config: Dict[str, Any]):
+        super().__init__(name, config)
+        # Specialized coding actions
+```
+
+**Available Actions**:
+- `write_code`: Create code files
+- `run_tests`: Execute test suites
+- `analyze_code`: Perform static analysis
+- `debug_code`: Debug errors
+
+### Research Environment
+
+For academic research and paper analysis:
+
+```python
+class ResearchEnvironment(BaseEnvironment):
+    def __init__(self, name: str, config: Dict[str, Any]):
+        super().__init__(name, config)
+        # Research-specific actions
+```
+
+**Available Actions**:
+- `search_papers`: Query academic databases
+- `read_paper`: Extract paper content
+- `analyze_citations`: Analyze citation networks
+
+### Minecraft Environment
+
+For embodied agent tasks in Minecraft:
+
+```python
+class MinecraftEnvironment(BaseEnvironment):
+    def __init__(self, name: str, config: Dict[str, Any]):
+        super().__init__(name, config)
+        # Game-specific actions
+    
+    def register_agent(self, agent_id: str, agent_port: int):
+        """Register an agent with the Minecraft server."""
+        pass
+```
+
+**Available Actions**:
+- `move`: Move in world
+- `mine_block`: Mine resources
+- `place_block`: Build structures
+- `craft_item`: Craft items
+
+### Database Environment
+
+For database diagnosis and optimization:
+
+```python
+class DBEnvironment(BaseEnvironment):
+    def __init__(self, name: str, config: Dict[str, Any]):
+        super().__init__(name, config)
+        # Database-specific actions
+```
+
+**Available Actions**:
+- `query_metrics`: Get performance metrics
+- `analyze_slow_queries`: Identify bottlenecks
+- `suggest_optimization`: Recommend fixes
+
+## Environment Selection
+
+The Engine selects the appropriate environment based on configuration:
+
+```python
+def _initialize_environment(self, env_config: Dict[str, Any]) -> BaseEnvironment:
+    """
+    Initialize the environment based on configuration.
+    
+    Args:
+        env_config (dict): Environment configuration.
+    
+    Returns:
+        BaseEnvironment: An instance of the environment.
+    
+    Raises:
+        ValueError: If the environment type is not supported.
+    """
+    env_type = env_config.get("type")
+    
+    if env_type == "Web":
+        return WebEnvironment(name="Web Environment", config=env_config)
+    elif env_type == "Base":
+        return BaseEnvironment(name="Base Environment", config=env_config)
+    elif env_type == "Research":
+        return ResearchEnvironment(name="Research Environment", config=env_config)
+    elif env_type == "Coding":
+        return CodingEnvironment(name="Coding Environment", config=env_config)
+    elif env_type == "Minecraft":
+        return MinecraftEnvironment(name="Minecraft Environment", config=env_config)
+    elif env_type == "DB":
+        return DBEnvironment(name="DB Environment", config=env_config)
+    else:
+        raise ValueError(f"Unsupported environment type: {env_type}")
+```
+
+See [marble/engine/engine.py:102-141](/home/daytona/workspace/source/marble/engine/engine.py#L102-L141)
+
+## Creating Custom Environments
+
+To create a custom environment:
+
+### Step 1: Subclass BaseEnvironment
+
+```python
+from marble.environments import BaseEnvironment
+
+class CustomEnvironment(BaseEnvironment):
+    def __init__(self, name: str, config: Dict[str, Any]):
+        super().__init__(name, config)
+        
+        # Initialize custom state
+        self.state["custom_field"] = config.get("custom_value")
+        
+        # Register custom actions
+        self._register_custom_actions()
+    
+    def _register_custom_actions(self):
+        """Register environment-specific actions."""
+        self.register_action(
+            "custom_action",
+            self._custom_action_handler,
+            {
+                "type": "function",
+                "function": {
+                    "name": "custom_action",
+                    "description": "Performs a custom action",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "param": {
+                                "type": "string",
+                                "description": "A parameter"
+                            }
+                        },
+                        "required": ["param"]
+                    }
+                }
+            }
+        )
+    
+    def _custom_action_handler(self, param: str) -> Dict[str, Any]:
+        """Handle the custom action."""
+        # Implement action logic
+        result = {"success": True, "output": f"Processed {param}"}
+        return result
+```
+
+### Step 2: Register in Engine
+
+```python
+# Add to engine._initialize_environment()
+elif env_type == "Custom":
+    return CustomEnvironment(name="Custom Environment", config=env_config)
+```
+
+### Step 3: Configure
+
+```yaml
+environment:
+  type: Custom
+  description: "My custom environment"
+  custom_value: "example"
+  max_iterations: 20
+```
+
+## Action Design Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Clear Descriptions" icon="file-lines">
+    Write detailed action descriptions that explain purpose, parameters, and expected outputs
+  </Card>
+  
+  <Card title="Atomic Operations" icon="atom">
+    Design actions to be atomic - each should do one thing well
+  </Card>
+  
+  <Card title="Consistent Returns" icon="arrows-rotate">
+    Always return structured dictionaries with "success" and "result" fields
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation">
+    Include error information in return values for agent debugging
+  </Card>
+</CardGroup>
+
+<Note>
+  **Action Granularity**: Balance between providing powerful high-level actions and flexible low-level primitives. Too granular = many steps required. Too coarse = limited agent flexibility.
+</Note>
+
+## Environment Lifecycle
+
+```
+┌─────────────┐
+│ Initialize  │
+│   State     │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│  Register   │◄───── Add available
+│   Actions   │       actions
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│   Ready     │◄───── Agents can
+│   State     │       interact
+└──────┬──────┘
+       │
+       ▼
+   ┌───────┐
+   │ Agent │
+   │ Acts  │
+   └───┬───┘
+       │
+       ▼
+┌─────────────┐
+│   Apply     │
+│   Action    │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│   Update    │
+│   State     │
+└──────┬──────┘
+       │
+       ▼
+    ┌──────┐
+    │ Done? │──Yes──► Terminate
+    └───┬──┘
+        │
+       No
+        │
+        └──► Continue
+```
+
+## Related Concepts
+
+<CardGroup cols={3}>
+  <Card title="Agents" icon="user-robot" href="/concepts/agents">
+    Learn about agent actions
+  </Card>
+  
+  <Card title="Engine" icon="gears" href="/concepts/engine">
+    Understand coordination
+  </Card>
+  
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    See the full system design
+  </Card>
+</CardGroup>

@@ -1,0 +1,533 @@
+---
+title: Minecraft Environment
+description: Documentation for the Minecraft environment in MARBLE, enabling multi-agent collaboration in Minecraft worlds
+---
+
+The `MinecraftEnvironment` provides a comprehensive interface for agents to interact with Minecraft worlds, supporting complex building tasks, resource gathering, and multi-agent coordination.
+
+## Overview
+
+The Minecraft environment connects agents to a Minecraft server through the MinecraftClient, allowing them to perform actions like navigation, block manipulation, inventory management, and inter-agent collaboration.
+
+## Installation
+
+To use the Minecraft environment, ensure you have the required dependencies:
+
+```bash
+pip install mineflayer
+```
+
+## Configuration
+
+### Basic Configuration
+
+<CodeGroup>
+
+```python Python
+from marble.environments.minecraft_env import MinecraftEnvironment
+
+config = {
+    "host": "localhost",
+    "port": 25565,
+    "task_id": 0,
+    "task_name": "build_house"
+}
+
+env = MinecraftEnvironment(name="minecraft", config=config)
+```
+
+```yaml YAML
+name: minecraft_env
+config:
+  host: localhost
+  port: 25565
+  task_id: 0
+  task_name: build_house
+```
+
+</CodeGroup>
+
+### Configuration Parameters
+
+<ParamField path="host" type="string" default="localhost">
+  The hostname or IP address of the Minecraft server
+</ParamField>
+
+<ParamField path="port" type="integer" default="25565">
+  The port number of the Minecraft server
+</ParamField>
+
+<ParamField path="task_id" type="integer" default="0">
+  The ID of the task to execute
+</ParamField>
+
+<ParamField path="task_name" type="string" default="test">
+  The name of the task for logging and judging purposes
+</ParamField>
+
+## Agent Registration and Launch
+
+### Registering Agents
+
+```python
+agent_id = "player1"
+agent_port = 5000
+
+env.register_agent(name=agent_id, local_port=agent_port)
+```
+
+### Launching the Environment
+
+```python
+env.launch()  # Starts Minecraft client and judge process
+```
+
+<Note>
+  The `launch()` method includes a 40-second wait time to ensure the Minecraft client and judge are fully initialized.
+</Note>
+
+## Available Actions
+
+The Minecraft environment provides a rich set of actions for agent interaction.
+
+### Navigation Actions
+
+#### scanNearbyEntities
+
+Find Minecraft items, blocks, or creatures within a radius.
+
+<ParamField path="item_name" type="string" required>
+  The name of the item/entity to scan for
+</ParamField>
+
+<ParamField path="radius" type="integer" default="10">
+  The search radius in blocks
+</ParamField>
+
+<ParamField path="item_num" type="integer" default="-1">
+  The number of items to find (-1 for all)
+</ParamField>
+
+```python
+result = env.apply_action(
+    agent_id="player1",
+    action_name="scanNearbyEntities",
+    arguments={"item_name": "oak_log", "radius": 20}
+)
+```
+
+#### navigateTo
+
+Move to a specific position in the world.
+
+<ParamField path="x" type="integer" required>
+  The x coordinate
+</ParamField>
+
+<ParamField path="y" type="integer" required>
+  The y coordinate
+</ParamField>
+
+<ParamField path="z" type="integer" required>
+  The z coordinate
+</ParamField>
+
+```python
+result = env.apply_action(
+    agent_id="player1",
+    action_name="navigateTo",
+    arguments={"x": 100, "y": 64, "z": 200}
+)
+```
+
+### Block Manipulation
+
+#### MineBlock
+
+Dig a block at a specific position.
+
+```python
+result = env.apply_action(
+    agent_id="player1",
+    action_name="MineBlock",
+    arguments={"x": 100, "y": 64, "z": 200}
+)
+```
+
+#### placeBlock
+
+Place a block at a specific position with a specific facing direction.
+
+<ParamField path="item_name" type="string" required>
+  The name of the block to place
+</ParamField>
+
+<ParamField path="x" type="integer" required>
+  The x coordinate
+</ParamField>
+
+<ParamField path="y" type="integer" required>
+  The y coordinate
+</ParamField>
+
+<ParamField path="z" type="integer" required>
+  The z coordinate
+</ParamField>
+
+<ParamField path="facing" type="string" required>
+  The facing direction: W, E, S, N, x, y, z, or A (auto)
+</ParamField>
+
+```python
+result = env.apply_action(
+    agent_id="player1",
+    action_name="placeBlock",
+    arguments={
+        "item_name": "oak_planks",
+        "x": 100,
+        "y": 65,
+        "z": 200,
+        "facing": "A"
+    }
+)
+```
+
+### Inventory Management
+
+#### equipItem
+
+Equip an item to a specific slot.
+
+<ParamField path="slot" type="string" required>
+  The slot name: hand, head, torso, legs, feet, or off-hand
+</ParamField>
+
+<ParamField path="item_name" type="string" required>
+  The name of the item to equip
+</ParamField>
+
+```python
+result = env.apply_action(
+    agent_id="player1",
+    action_name="equipItem",
+    arguments={"slot": "hand", "item_name": "diamond_pickaxe"}
+)
+```
+
+#### handoverBlock
+
+Transfer items between agents.
+
+<ParamField path="target_player_name" type="string" required>
+  The name of the player to receive the item
+</ParamField>
+
+<ParamField path="item_name" type="string" required>
+  The name of the item to transfer
+</ParamField>
+
+<ParamField path="item_count" type="integer" required>
+  The number of items to transfer
+</ParamField>
+
+```python
+result = env.apply_action(
+    agent_id="player1",
+    action_name="handoverBlock",
+    arguments={
+        "target_player_name": "player2",
+        "item_name": "oak_log",
+        "item_count": 10
+    }
+)
+```
+
+#### withdrawItem
+
+Take items from a container (chest, furnace, etc.).
+
+<ParamField path="item_name" type="string" required>
+  The name of the item to withdraw
+</ParamField>
+
+<ParamField path="from_name" type="string" required>
+  The container type: chest, container, or furnace
+</ParamField>
+
+<ParamField path="item_count" type="integer" required>
+  The number of items to withdraw
+</ParamField>
+
+```python
+result = env.apply_action(
+    agent_id="player1",
+    action_name="withdrawItem",
+    arguments={
+        "item_name": "diamond",
+        "from_name": "chest",
+        "item_count": 5
+    }
+)
+```
+
+### Advanced Building Actions
+
+#### erectDirtLadder
+
+Create a vertical dirt ladder structure to reach higher locations.
+
+<ParamField path="top_x" type="integer" required>
+  The x coordinate of the ladder top
+</ParamField>
+
+<ParamField path="top_y" type="integer" required>
+  The y coordinate of the ladder top
+</ParamField>
+
+<ParamField path="top_z" type="integer" required>
+  The z coordinate of the ladder top
+</ParamField>
+
+```python
+result = env.apply_action(
+    agent_id="player1",
+    action_name="erectDirtLadder",
+    arguments={"top_x": 100, "top_y": 80, "top_z": 200}
+)
+```
+
+<Note>
+  Remember to dismantle the dirt ladder after use with `dismantleDirtLadder` to clean up temporary structures.
+</Note>
+
+#### dismantleDirtLadder
+
+Remove a dirt ladder structure.
+
+```python
+result = env.apply_action(
+    agent_id="player1",
+    action_name="dismantleDirtLadder",
+    arguments={"top_x": 100, "top_y": 80, "top_z": 200}
+)
+```
+
+### Container Management
+
+#### fetchContainerContents
+
+Get the contents of a container (chest, furnace, etc.).
+
+<ParamField path="item_name" type="string" required>
+  The container type to fetch contents from
+</ParamField>
+
+<ParamField path="position" type="array" default="[0, 0, 0]">
+  The optional position [x, y, z] of the specific container
+</ParamField>
+
+```python
+result = env.apply_action(
+    agent_id="player1",
+    action_name="fetchContainerContents",
+    arguments={
+        "item_name": "chest",
+        "position": [100, 64, 200]
+    }
+)
+```
+
+### Environment Information
+
+#### get_environment_info
+
+Retrieve current environment state information.
+
+```python
+result = env.apply_action(
+    agent_id="player1",
+    action_name="get_environment_info",
+    arguments={}
+)
+```
+
+## Getting Environment State
+
+```python
+state = env.get_state()
+# Returns comprehensive environment information for the first agent
+```
+
+## Complete Example
+
+<CodeGroup>
+
+```python Interactive Mode
+from marble.environments.minecraft_env import MinecraftEnvironment
+
+agent_id = "player1"
+agent_port = 5000
+
+# Initialize environment
+mcenv = MinecraftEnvironment("minecraft")
+mcenv.register_agent(agent_id, agent_port)
+mcenv.launch()
+
+# Interactive command loop
+while True:
+    command = input("Action:\n").strip()
+    args = command.split(" ")
+    action = args[0]
+    
+    arg_dict = dict()
+    arg_name, arg_value = None, None
+    
+    for i in range(1, len(args)):
+        if i % 2 == 1:
+            arg_name = args[i]
+        else:
+            arg_value = args[i]
+            try:
+                arg_value = eval(arg_value)
+            except:
+                pass
+            arg_dict[arg_name] = arg_value
+            arg_name, arg_value = None, None
+    
+    try:
+        ret = mcenv.apply_action(agent_id, action, arg_dict)
+        print(f"Result:\n{ret}")
+    except Exception as e:
+        print(f"Error:\n{e}")
+```
+
+```python Multi-Agent Building Task
+from marble.environments.minecraft_env import MinecraftEnvironment
+
+# Configure environment
+config = {
+    "host": "localhost",
+    "port": 25565,
+    "task_id": 1,
+    "task_name": "collaborative_build"
+}
+
+env = MinecraftEnvironment(name="minecraft", config=config)
+
+# Register multiple agents
+env.register_agent("builder1", 5000)
+env.register_agent("builder2", 5001)
+
+# Launch environment
+env.launch()
+
+# Agent 1 scans for resources
+result = env.apply_action(
+    agent_id="builder1",
+    action_name="scanNearbyEntities",
+    arguments={"item_name": "oak_log", "radius": 30}
+)
+
+# Agent 1 collects resources
+env.apply_action(
+    agent_id="builder1",
+    action_name="MineBlock",
+    arguments={"x": 95, "y": 64, "z": 195}
+)
+
+# Agent 1 transfers resources to Agent 2
+env.apply_action(
+    agent_id="builder1",
+    action_name="handoverBlock",
+    arguments={
+        "target_player_name": "builder2",
+        "item_name": "oak_log",
+        "item_count": 20
+    }
+)
+
+# Agent 2 builds structure
+env.apply_action(
+    agent_id="builder2",
+    action_name="placeBlock",
+    arguments={
+        "item_name": "oak_planks",
+        "x": 100,
+        "y": 65,
+        "z": 200,
+        "facing": "A"
+    }
+)
+
+# Clean up
+env.finish()
+```
+
+</CodeGroup>
+
+## Environment Lifecycle
+
+### Launching
+
+The `launch()` method:
+1. Starts the Minecraft client connection
+2. Spawns a build judger process for task evaluation
+3. Waits 40 seconds for initialization
+
+### Finishing
+
+The `finish()` method:
+1. Terminates the Minecraft client
+2. Stops the judge process
+
+```python
+env.finish()
+```
+
+## Action Result Format
+
+All actions return results that are stored in the environment state:
+
+```python
+result = env.apply_action(agent_id, action_name, arguments)
+# Result is stored in env.state["last_action_result"]
+```
+
+<Note>
+  The environment automatically increments the iteration counter and sets `done=True` when `max_iterations` is reached.
+</Note>
+
+## Tips and Best Practices
+
+<AccordionGroup>
+
+<Accordion title="Resource Management">
+  - Use `scanNearbyEntities` before attempting to gather resources
+  - Always check inventory state before transferring items between agents
+  - Use containers (chests) for efficient item storage and sharing
+</Accordion>
+
+<Accordion title="Building Strategies">
+  - Use `erectDirtLadder` and `dismantleDirtLadder` for temporary scaffolding
+  - Plan block placement sequences to avoid positioning issues
+  - Coordinate agent positions to avoid interference
+</Accordion>
+
+<Accordion title="Multi-Agent Coordination">
+  - Use `handoverBlock` for direct agent-to-agent item transfer
+  - Leverage `get_environment_info` to share world state between agents
+  - Designate roles (builder, gatherer, etc.) for efficient task completion
+</Accordion>
+
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Base Environment" icon="cube" href="/environments/base">
+    Learn about the base environment interface
+  </Card>
+  <Card title="Agents" icon="robot" href="/concepts/agents">
+    Explore agent implementations for Minecraft tasks
+  </Card>
+</CardGroup>

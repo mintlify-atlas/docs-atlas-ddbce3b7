@@ -1,0 +1,499 @@
+---
+title: "ResearchEnvironment"
+description: "Environment for research paper retrieval and academic information gathering using arXiv and Semantic Scholar APIs"
+---
+
+## Overview
+
+`ResearchEnvironment` extends `BaseEnvironment` to provide comprehensive research capabilities including paper search, author profile collection, and web scraping functionality. It integrates with arXiv and Semantic Scholar APIs.
+
+## Class Definition
+
+```python
+class ResearchEnvironment(BaseEnvironment):
+    def __init__(self, config: Dict[str, Any], name: str = "ResearchEnv")
+```
+
+## Constructor
+
+### `__init__(config, name)`
+
+Initialize a new research environment.
+
+<ParamField path="config" type="Dict[str, Any]" required>
+  Configuration dictionary supporting all BaseEnvironment config options:
+  - `description`: Environment description
+  - `task_description`: Research task description
+  - `ground_truth`: Expected research findings
+  - `max_iterations`: Maximum iterations
+</ParamField>
+
+<ParamField path="name" type="str" default="ResearchEnv">
+  Name of the environment
+</ParamField>
+
+### Example
+
+```python
+from marble.environments.research_env import ResearchEnvironment
+
+config = {
+    "task_description": "Find recent papers on transformer architectures",
+    "max_iterations": 20
+}
+
+env = ResearchEnvironment(config=config, name="TransformerResearch")
+```
+
+## Registered Actions
+
+ResearchEnvironment automatically registers seven research actions:
+
+### `get_related_papers`
+
+Fetches related research papers based on query parameters.
+
+<ParamField path="num_results" type="int" required>
+  Number of results to fetch
+</ParamField>
+
+<ParamField path="query" type="str" optional>
+  Keyword or phrase to search for
+</ParamField>
+
+<ParamField path="domain" type="str" optional>
+  Specific research domain (e.g., "cs.AI", "cs.LG")
+</ParamField>
+
+<ParamField path="author" type="str" optional>
+  Author name to search for
+</ParamField>
+
+<ResponseField name="success" type="bool">
+  Whether the operation succeeded
+</ResponseField>
+
+<ResponseField name="papers" type="List[Dict]">
+  List of paper objects with fields: title, authors, abstract, arxiv_id, published, url, citations, etc.
+</ResponseField>
+
+<ResponseField name="error-msg" type="str">
+  Error message if operation failed
+</ResponseField>
+
+#### Example
+
+```python
+result = env.apply_action(
+    agent_id="researcher",
+    action_name="get_related_papers",
+    arguments={
+        "num_results": 10,
+        "query": "transformer attention mechanism",
+        "domain": "cs.LG"
+    }
+)
+
+for paper in result["papers"]:
+    print(f"Title: {paper['title']}")
+    print(f"arXiv ID: {paper['arxiv_id']}")
+```
+
+### `get_recent_papers`
+
+Fetches recent papers in a given domain.
+
+<ParamField path="max_results" type="int" required>
+  Maximum number of results to fetch
+</ParamField>
+
+<ParamField path="domain" type="str" optional>
+  Research domain to search (e.g., "cs.AI")
+</ParamField>
+
+<ResponseField name="success" type="bool">
+  Operation success status
+</ResponseField>
+
+<ResponseField name="papers" type="List[Dict]">
+  List of recent paper objects
+</ResponseField>
+
+<ResponseField name="error-msg" type="str">
+  Error message if failed
+</ResponseField>
+
+#### Example
+
+```python
+result = env.apply_action(
+    agent_id="researcher",
+    action_name="get_recent_papers",
+    arguments={
+        "domain": "cs.AI",
+        "max_results": 20
+    }
+)
+```
+
+### `collect_publications_and_coauthors`
+
+Collects an author's publications and co-author information.
+
+<ParamField path="author" type="str" required>
+  Author's name
+</ParamField>
+
+<ParamField path="known_paper_titles" type="List[str]" optional>
+  List of known paper titles for author disambiguation
+</ParamField>
+
+<ParamField path="paper_max_num" type="int" default={20}>
+  Maximum number of papers to fetch
+</ParamField>
+
+<ParamField path="exclude_known" type="bool" default={true}>
+  Whether to exclude known papers from results
+</ParamField>
+
+<ResponseField name="success" type="bool">
+  Operation success status
+</ResponseField>
+
+<ResponseField name="paper_abstracts" type="List[str]">
+  List of paper abstracts
+</ResponseField>
+
+<ResponseField name="paper_titles" type="List[str]">
+  List of paper titles
+</ResponseField>
+
+<ResponseField name="co_authors" type="List[str]">
+  List of co-author names
+</ResponseField>
+
+<ResponseField name="error-msg" type="str">
+  Error message if failed
+</ResponseField>
+
+#### Example
+
+```python
+result = env.apply_action(
+    agent_id="researcher",
+    action_name="collect_publications_and_coauthors",
+    arguments={
+        "author": "Geoffrey Hinton",
+        "known_paper_titles": ["ImageNet Classification with Deep CNNs"],
+        "paper_max_num": 50,
+        "exclude_known": True
+    }
+)
+
+print(f"Found {len(result['paper_titles'])} papers")
+print(f"Co-authors: {', '.join(result['co_authors'][:10])}")
+```
+
+### `get_paper_by_keyword`
+
+Fetches papers based on a keyword search.
+
+<ParamField path="keyword" type="str" required>
+  Keyword to search for
+</ParamField>
+
+<ParamField path="max_papers" type="int" required>
+  Maximum number of papers to fetch
+</ParamField>
+
+<ResponseField name="success" type="bool">
+  Operation success status
+</ResponseField>
+
+<ResponseField name="papers" type="List[Dict]">
+  List of matching paper objects
+</ResponseField>
+
+<ResponseField name="error-msg" type="str">
+  Error message if failed
+</ResponseField>
+
+#### Example
+
+```python
+result = env.apply_action(
+    agent_id="researcher",
+    action_name="get_paper_by_keyword",
+    arguments={
+        "keyword": "reinforcement learning",
+        "max_papers": 15
+    }
+)
+```
+
+### `get_paper_by_arxiv_id`
+
+Fetches a specific paper by its arXiv ID.
+
+<ParamField path="arxiv_id" type="str" required>
+  arXiv ID of the paper (e.g., "2103.14030")
+</ParamField>
+
+<ResponseField name="success" type="bool">
+  Operation success status
+</ResponseField>
+
+<ResponseField name="paper" type="Dict">
+  Paper object with full details
+</ResponseField>
+
+<ResponseField name="error-msg" type="str">
+  Error message if failed or paper not found
+</ResponseField>
+
+#### Example
+
+```python
+result = env.apply_action(
+    agent_id="researcher",
+    action_name="get_paper_by_arxiv_id",
+    arguments={"arxiv_id": "1706.03762"}
+)
+
+if result["success"]:
+    paper = result["paper"]
+    print(f"Title: {paper['title']}")
+    print(f"Authors: {', '.join(paper['authors'])}")
+```
+
+### `get_paper_by_title`
+
+Fetches a paper by searching for its exact title.
+
+<ParamField path="title" type="str" required>
+  Title of the paper
+</ParamField>
+
+<ResponseField name="success" type="bool">
+  Operation success status
+</ResponseField>
+
+<ResponseField name="paper" type="Dict">
+  Paper object if found
+</ResponseField>
+
+<ResponseField name="error-msg" type="str">
+  Error message if failed or paper not found
+</ResponseField>
+
+#### Example
+
+```python
+result = env.apply_action(
+    agent_id="researcher",
+    action_name="get_paper_by_title",
+    arguments={
+        "title": "Attention Is All You Need"
+    }
+)
+```
+
+### `fetch_webpage`
+
+Fetches the content of a webpage from a given URL.
+
+<ParamField path="url" type="str" required>
+  Valid HTTP/HTTPS URL of the webpage to fetch
+</ParamField>
+
+<ResponseField name="success" type="bool">
+  Operation success status
+</ResponseField>
+
+<ResponseField name="content" type="str">
+  HTML content of the webpage
+</ResponseField>
+
+<ResponseField name="error-msg" type="str">
+  Error message if request failed
+</ResponseField>
+
+#### Features
+
+- **Rate Limiting**: Enforces minimum 1 second between requests
+- **Timeout**: 5 second timeout per request
+- **User Agent**: Uses browser-like user agent to avoid blocks
+- **Caching**: Tracks last request timestamp to prevent excessive requests
+
+#### Example
+
+```python
+result = env.apply_action(
+    agent_id="researcher",
+    action_name="fetch_webpage",
+    arguments={
+        "url": "https://arxiv.org/abs/1706.03762"
+    }
+)
+
+if result["success"]:
+    html_content = result["content"]
+    # Process HTML content
+```
+
+## Paper Object Schema
+
+Paper objects returned by the actions have the following structure:
+
+```python
+{
+    "title": str,           # Paper title
+    "authors": List[str],   # List of author names
+    "abstract": str,        # Paper abstract
+    "arxiv_id": str,        # arXiv identifier
+    "published": str,       # Publication date
+    "url": str,             # URL to paper
+    "pdf_url": str,         # URL to PDF
+    "citations": int,       # Citation count (if available)
+    "venue": str,           # Publication venue
+    "year": int             # Publication year
+}
+```
+
+## Rate Limiting and Best Practices
+
+### Web Scraping
+
+The `fetch_webpage` action implements automatic rate limiting:
+
+```python
+# Minimum 1 second between requests
+while time.time() - env.last_visited_timestamp < 1:
+    time.sleep(0.5)
+```
+
+### API Usage
+
+For API-based actions, follow these best practices:
+
+1. **Batch Requests**: Fetch multiple results in one call when possible
+2. **Cache Results**: Store results in agent memory to avoid duplicate requests
+3. **Specific Queries**: Use narrow queries with domain filters for better results
+
+## Complete Research Workflow Example
+
+```python
+from marble.environments.research_env import ResearchEnvironment
+
+config = {
+    "task_description": "Survey recent transformer papers",
+    "max_iterations": 30
+}
+
+env = ResearchEnvironment(config=config)
+
+# Step 1: Get recent papers in the domain
+recent_result = env.apply_action(
+    agent_id="researcher",
+    action_name="get_recent_papers",
+    arguments={"domain": "cs.CL", "max_results": 10}
+)
+
+print(f"Found {len(recent_result['papers'])} recent papers")
+
+# Step 2: Search for specific topics
+related_result = env.apply_action(
+    agent_id="researcher",
+    action_name="get_related_papers",
+    arguments={
+        "num_results": 20,
+        "query": "transformer efficiency",
+        "domain": "cs.LG"
+    }
+)
+
+# Step 3: Get details of a specific paper
+if related_result["papers"]:
+    first_paper = related_result["papers"][0]
+    detail_result = env.apply_action(
+        agent_id="researcher",
+        action_name="get_paper_by_arxiv_id",
+        arguments={"arxiv_id": first_paper["arxiv_id"]}
+    )
+    
+    # Step 4: Investigate authors
+    authors = detail_result["paper"]["authors"]
+    if authors:
+        author_result = env.apply_action(
+            agent_id="researcher",
+            action_name="collect_publications_and_coauthors",
+            arguments={
+                "author": authors[0],
+                "paper_max_num": 30
+            }
+        )
+        print(f"Author has {len(author_result['paper_titles'])} papers")
+        print(f"Collaborators: {author_result['co_authors'][:5]}")
+
+# Step 5: Fetch additional information from web
+web_result = env.apply_action(
+    agent_id="researcher",
+    action_name="fetch_webpage",
+    arguments={"url": first_paper["url"]}
+)
+
+print(f"Environment state: {env.get_state()}")
+print(f"Iterations used: {env.current_iteration}/{env.max_iterations}")
+```
+
+## Error Handling
+
+### Common Errors
+
+```python
+result = env.apply_action(
+    agent_id="researcher",
+    action_name="get_paper_by_arxiv_id",
+    arguments={"arxiv_id": "invalid-id"}
+)
+
+if not result["success"]:
+    if "not found" in result["error-msg"]:
+        print("Paper does not exist")
+    elif "ValueError" in str(result.get("error-msg", "")):
+        print("Invalid parameter format")
+```
+
+### Network Errors
+
+```python
+result = env.apply_action(
+    agent_id="researcher",
+    action_name="fetch_webpage",
+    arguments={"url": "https://example.com"}
+)
+
+if not result["success"]:
+    error = result["error-msg"]
+    if "timeout" in error.lower():
+        print("Request timed out")
+    elif "connection" in error.lower():
+        print("Connection error")
+```
+
+## Research Domains
+
+Common arXiv domain identifiers:
+
+- `cs.AI` - Artificial Intelligence
+- `cs.LG` - Machine Learning
+- `cs.CL` - Computation and Language
+- `cs.CV` - Computer Vision
+- `cs.NE` - Neural and Evolutionary Computing
+- `stat.ML` - Statistics (Machine Learning)
+
+## See Also
+
+- [BaseEnvironment](/api/environments/base-env) - Parent class documentation
+- [CodingEnvironment](/api/environments/coding-env) - Code development environment
+- [Agent API](/api/agents/base-agent) - Agent implementation

@@ -1,0 +1,239 @@
+---
+title: 'Engine'
+description: 'Core engine class that orchestrates multi-agent simulations'
+---
+
+## Overview
+
+The `Engine` class is the central orchestrator of MARBLE, coordinating agents within environments. It manages the simulation lifecycle, handles different coordination modes, and tracks evaluation metrics.
+
+## Constructor
+
+### `__init__(config: Config)`
+
+Initialize the Engine with the given configuration.
+
+<ParamField path="config" type="Config" required>
+  Configuration parameters containing:
+  - `environment`: Environment configuration
+  - `agents`: List of agent configurations
+  - `memory`: Memory configuration
+  - `metrics`: Metrics configuration
+  - `task`: Task definition with content and output format
+  - `coordination_mode`: Mode of agent coordination (star, graph, chain, tree)
+  - `engine_planner`: Planner configuration
+  - `llm`: Language model configuration
+</ParamField>
+
+<ResponseField name="engine" type="Engine">
+  An initialized Engine instance with:
+  - Environment initialized based on type
+  - Agents created and linked to agent graph
+  - Memory system configured
+  - Evaluator set up with metrics
+  - EnginePlanner initialized
+</ResponseField>
+
+```python Example
+from marble import Engine
+from marble.configs.config import Config
+
+# Load configuration
+config = Config.from_file("config.yaml")
+
+# Initialize engine
+engine = Engine(config)
+```
+
+## Public Methods
+
+### `start()`
+
+Start the engine to run the simulation based on the configured coordination mode.
+
+```python
+engine.start()
+```
+
+<ResponseField name="return" type="None">
+  Executes the simulation and writes results to the configured output file.
+</ResponseField>
+
+<Expandable title="Coordination Modes">
+  The engine supports four coordination modes:
+  
+  - **star**: Centralized coordination where a planner assigns tasks
+  - **graph**: Graph-based coordination where agents autonomously plan
+  - **chain**: Sequential chain where agents pass tasks to each other
+  - **tree**: Hierarchical tree structure with parent-child relationships
+</Expandable>
+
+### `star_coordinate()`
+
+Run simulation in centralized coordination mode.
+
+```python
+engine.star_coordinate()
+```
+
+<ResponseField name="return" type="None">
+  Executes star coordination pattern where:
+  1. Central planner assigns tasks to agents
+  2. Agents execute tasks and return results
+  3. Results are summarized and evaluated
+  4. Process repeats until max iterations or termination condition
+</ResponseField>
+
+### `graph_coordinate()`
+
+Run simulation in graph-based coordination mode.
+
+```python
+engine.graph_coordinate()
+```
+
+<ResponseField name="return" type="None">
+  Executes graph coordination pattern where:
+  1. Initial task distributed to all agents
+  2. Each agent autonomously plans its next task
+  3. Agents can communicate based on graph relationships
+  4. Results aggregated and evaluated each iteration
+</ResponseField>
+
+### `chain_coordinate()`
+
+Run simulation in chain-based coordination mode.
+
+```python
+engine.chain_coordinate()
+```
+
+<ResponseField name="return" type="None">
+  Executes chain coordination pattern where:
+  1. Initial agent selected to start the chain
+  2. Current agent executes task and chooses next agent
+  3. Task and results passed sequentially
+  4. Continues until max chain length or termination
+</ResponseField>
+
+### `tree_coordinate()`
+
+Run simulation in tree-based coordination mode.
+
+```python
+engine.tree_coordinate()
+```
+
+<ResponseField name="return" type="None">
+  Executes tree coordination pattern where:
+  1. Root agent receives the overall task
+  2. Parent agents delegate subtasks to children
+  3. Execution flows recursively through the tree
+  4. Results bubble up and are aggregated
+</ResponseField>
+
+## Properties
+
+<ParamField path="environment" type="BaseEnvironment">
+  The environment instance where agents operate. Can be BaseEnvironment, WebEnvironment, ResearchEnvironment, CodingEnvironment, WorldSimulationEnvironment, MinecraftEnvironment, or DBEnvironment.
+</ParamField>
+
+<ParamField path="agents" type="List[BaseAgent]">
+  List of all agent instances participating in the simulation.
+</ParamField>
+
+<ParamField path="graph" type="AgentGraph">
+  The agent graph managing relationships and interactions between agents.
+</ParamField>
+
+<ParamField path="memory" type="Union[BaseMemory, SharedMemory]">
+  Memory system for storing and retrieving information during simulation.
+</ParamField>
+
+<ParamField path="evaluator" type="Evaluator">
+  Evaluator instance for measuring simulation performance across multiple metrics.
+</ParamField>
+
+<ParamField path="planner" type="EnginePlanner">
+  EnginePlanner instance for task assignment and decision making.
+</ParamField>
+
+<ParamField path="max_iterations" type="int">
+  Maximum number of iterations before simulation terminates (default: 10).
+</ParamField>
+
+<ParamField path="current_iteration" type="int">
+  Current iteration count in the simulation.
+</ParamField>
+
+<ParamField path="task" type="str">
+  The main task description for the simulation.
+</ParamField>
+
+<ParamField path="coordinate_mode" type="str">
+  The coordination mode: "star", "graph", "chain", or "tree".
+</ParamField>
+
+## Complete Example
+
+```python
+from marble import Engine
+from marble.configs.config import Config
+
+# Load configuration from file
+config = Config.from_file("examples/research_config.yaml")
+
+# Initialize the engine
+engine = Engine(config)
+
+# Start the simulation
+# The engine will automatically select the coordination mode
+# based on the configuration
+engine.start()
+
+# Results are automatically written to the output file
+# specified in config.output.file_path
+print(f"Simulation completed in {engine.current_iteration} iterations")
+print(f"Coordination mode: {engine.coordinate_mode}")
+```
+
+## Advanced Usage
+
+### Custom Coordination
+
+You can directly call specific coordination methods:
+
+```python
+engine = Engine(config)
+
+# Force graph-based coordination
+engine.graph_coordinate()
+
+# Or use star coordination
+engine.star_coordinate()
+```
+
+### Accessing Results
+
+```python
+# Get token usage across all agents
+total_tokens = engine._get_totoal_token_usage()
+
+# Access evaluation metrics
+planning_scores = engine.evaluator.metrics["planning_score"]
+communication_scores = engine.evaluator.metrics["communication_score"]
+
+print(f"Total tokens used: {total_tokens}")
+print(f"Planning scores: {planning_scores}")
+print(f"Communication scores: {communication_scores}")
+```
+
+## Notes
+
+<Note>
+  The Engine automatically initializes environments, agents, memory, and the evaluator based on the provided configuration. Ensure your configuration file contains all required sections.
+</Note>
+
+<Warning>
+  For MinecraftEnvironment, the engine will automatically call `launch()` and `finish()` methods. Make sure your Minecraft server is properly configured.
+</Warning>

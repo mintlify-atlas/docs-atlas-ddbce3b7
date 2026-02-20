@@ -1,0 +1,617 @@
+---
+title: 'Research Collaboration Environment'
+description: 'Academic research environment for collaborative idea generation'
+icon: 'flask'
+---
+
+## Overview
+
+The Research environment enables AI agents to collaborate on academic research tasks, including literature review, paper discovery, and novel idea generation. It integrates with academic APIs to fetch papers, analyze research trends, and facilitate knowledge exchange.
+
+<Info>
+  Based on `marble/environments/research_env.py`, this environment provides comprehensive research tools for multi-agent collaboration.
+</Info>
+
+## Key Features
+
+- **Paper Discovery**: Search by keyword, title, arXiv ID, or author
+- **Related Papers**: Find papers related to specific queries or domains
+- **Author Networks**: Collect publications and co-author information
+- **Web Fetching**: Extract content from research websites
+- **Structured Idea Generation**: Generate research ideas using the 5Q format
+- **Benchmark Dataset**: 100 curated ML/AI papers from ResearchTown
+
+## Available Actions
+
+### Paper Search Actions
+
+<Tabs>
+  <Tab title="By Keyword">
+    Search for papers matching specific keywords:
+    
+    ```python
+    result = env.apply_action(
+        agent_id="agent1",
+        action_name="get_paper_by_keyword",
+        arguments={
+            "keyword": "large language models",
+            "max_papers": 10
+        }
+    )
+    ```
+    
+    **Returns**:
+    ```python
+    {
+        "success": True,
+        "papers": [
+            {
+                "title": "...",
+                "authors": [...],
+                "abstract": "...",
+                "arxiv_id": "...",
+                "published": "..."
+            }
+        ]
+    }
+    ```
+  </Tab>
+  
+  <Tab title="By Title">
+    Get a specific paper by its title:
+    
+    ```python
+    result = env.apply_action(
+        agent_id="agent1",
+        action_name="get_paper_by_title",
+        arguments={
+            "title": "Attention Is All You Need"
+        }
+    )
+    ```
+  </Tab>
+  
+  <Tab title="By arXiv ID">
+    Fetch paper using arXiv identifier:
+    
+    ```python
+    result = env.apply_action(
+        agent_id="agent1",
+        action_name="get_paper_by_arxiv_id",
+        arguments={
+            "arxiv_id": "1706.03762"
+        }
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Related Papers">
+    Find papers related to a query:
+    
+    ```python
+    result = env.apply_action(
+        agent_id="agent1",
+        action_name="get_related_papers",
+        arguments={
+            "query": "transformer architecture",
+            "domain": "cs.CL",
+            "num_results": 20
+        }
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Author and Publication Actions
+
+<Accordion title="Collect Author Publications">
+  Gather an author's papers and co-author network:
+  
+  ```python
+  result = env.apply_action(
+      agent_id="agent1",
+      action_name="collect_publications_and_coauthors",
+      arguments={
+          "author": "Yoshua Bengio",
+          "known_paper_titles": [
+              "Learning Deep Architectures for AI"
+          ],
+          "paper_max_num": 20,
+          "exclude_known": True
+      }
+  )
+  
+  # Returns
+  {
+      "success": True,
+      "paper_abstracts": [...],
+      "paper_titles": [...],
+      "co_authors": ["Ian Goodfellow", "Aaron Courville", ...]
+  }
+  ```
+</Accordion>
+
+<Accordion title="Get Recent Papers">
+  Fetch recent publications in a domain:
+  
+  ```python
+  result = env.apply_action(
+      agent_id="agent1",
+      action_name="get_recent_papers",
+      arguments={
+          "domain": "cs.AI",
+          "max_results": 50
+      }
+  )
+  ```
+</Accordion>
+
+### Web Content Actions
+
+```python
+result = env.apply_action(
+    agent_id="agent1",
+    action_name="fetch_webpage",
+    arguments={
+        "url": "https://arxiv.org/abs/2503.01935"
+    }
+)
+
+# Returns
+{
+    "success": True,
+    "content": "Extracted text content from the webpage..."
+}
+```
+
+## Configuration
+
+### Basic Research Environment Setup
+
+```yaml research_config.yaml
+coordinate_mode: graph  # Fully connected agent network
+
+environment:
+  type: Research
+  name: "Research Collaboration Environment"
+  max_iterations: 5
+
+task:
+  content: |
+    You are collaborating to generate a new research idea based on the following Introduction:
+    
+    **Introduction**
+    [Paper introduction text here]
+    
+    **Your Task**
+    1. Literature Review: Analyze the Introduction and conduct a brief literature review
+    2. Brainstorming: Collaboratively brainstorm potential research ideas
+    3. Summarization: Summarize your collective ideas
+    4. Formulate: Develop a new research proposal in 5Q format
+    
+  output_format: |
+    **[Question 1] - What is the problem?**
+    [Your answer]
+    
+    **[Question 2] - Why is it interesting and important?**
+    [Your answer]
+    
+    **[Question 3] - Why is it hard?**
+    [Your answer]
+    
+    **[Question 4] - Why hasn't it been solved before?**
+    [Your answer]
+    
+    **[Question 5] - What are the key components of my approach and results?**
+    [Your answer]
+
+agents:
+  - type: BaseAgent
+    agent_id: agent1
+    profile: |
+      I am a researcher with expertise in natural language processing,
+      particularly in transformer models and attention mechanisms.
+      
+  - type: BaseAgent
+    agent_id: agent2
+    profile: |
+      I am a researcher focused on machine learning optimization
+      and efficient model training techniques.
+
+llm: gpt-3.5-turbo
+
+memory:
+  type: SharedMemory
+
+metrics:
+  evaluate_llm: gpt-4o-mini
+  relevance: true
+  diversity_of_perspectives: true
+  engagement_level: true
+
+output:
+  file_path: result/discussion_output.jsonl
+  format: jsonl
+
+relationships:
+  - [agent1, agent2, "collaborate with"]
+  - [agent1, agent3, "collaborate with"]
+  - [agent2, agent3, "collaborate with"]
+```
+
+### Agent Profile Examples
+
+<Tabs>
+  <Tab title="NLP Researcher">
+    ```yaml
+    profile: |
+      I am a researcher dedicated to advancing natural language processing,
+      particularly focusing on large language models and their applications.
+      My recent work includes developing efficient attention mechanisms and
+      exploring few-shot learning capabilities in transformer architectures.
+    ```
+  </Tab>
+  
+  <Tab title="ML Systems Researcher">
+    ```yaml
+    profile: |
+      I am a researcher specializing in machine learning systems and
+      infrastructure. My work focuses on distributed training, model
+      optimization, and deployment strategies for large-scale models.
+    ```
+  </Tab>
+  
+  <Tab title="Theory Researcher">
+    ```yaml
+    profile: |
+      I am a researcher with a strong background in theoretical machine
+      learning and optimization. My work explores the mathematical foundations
+      of deep learning and convergence guarantees for various algorithms.
+    ```
+  </Tab>
+</Tabs>
+
+## Running Research Simulations
+
+### Using the Shell Script
+
+```bash
+cd scripts/research
+bash run_simulation.sh
+```
+
+### Converting JSONL to YAML Configs
+
+```bash
+cd multiagentbench
+
+# Generate configuration files from benchmark dataset
+bash runjsonl2yaml.sh
+
+# Parameters:
+# - DEFAULT_COORDINATE_MODE="graph"
+# - DEFAULT_ENVIRONMENT='{"max_iterations": 5, "name": "Research Collaboration Environment", "type": "Research"}'
+# - DEFAULT_LLM="gpt-3.5-turbo"
+# - DEFAULT_MEMORY='{"type": "BaseMemory"}'
+# - DEFAULT_METRICS_EVALUATE_LLM="gpt-4o"
+# - DEFAULT_OUTPUT='{"file_path": "result/discussion_output.jsonl"}'
+```
+
+### Python API Usage
+
+```python
+from marble.environments.research_env import ResearchEnvironment
+
+# Initialize environment
+config = {
+    "description": "Research collaboration on transformers",
+    "task_description": "Generate novel research ideas",
+    "max_iterations": 5
+}
+
+env = ResearchEnvironment(config=config, name="ResearchEnv")
+
+# Search for papers
+papers = env.apply_action(
+    agent_id="agent1",
+    action_name="get_paper_by_keyword",
+    arguments={
+        "keyword": "attention mechanisms",
+        "max_papers": 10
+    }
+)
+
+# Fetch author information
+author_info = env.apply_action(
+    agent_id="agent2",
+    action_name="collect_publications_and_coauthors",
+    arguments={
+        "author": "Geoffrey Hinton",
+        "paper_max_num": 30
+    }
+)
+
+print(f"Found {len(papers['papers'])} papers")
+print(f"Co-authors: {author_info['co_authors']}")
+```
+
+## The 5Q Research Format
+
+The environment uses a structured "5Q" format for research idea generation:
+
+<Steps>
+  <Step title="Question 1: What is the problem?">
+    Formulate the specific research question you aim to address.
+    
+    **Example**: How can we reduce the computational cost of transformer models while maintaining performance?
+  </Step>
+  
+  <Step title="Question 2: Why is it interesting and important?">
+    Explain the broader implications for the research community.
+    
+    **Example**: This would enable deployment of large models on resource-constrained devices and reduce environmental impact.
+  </Step>
+  
+  <Step title="Question 3: Why is it hard?">
+    Discuss challenges and why naive approaches fail.
+    
+    **Example**: Attention mechanisms are inherently quadratic in complexity, and simply reducing parameters often leads to significant performance degradation.
+  </Step>
+  
+  <Step title="Question 4: Why hasn't it been solved before?">
+    Identify gaps in previous research.
+    
+    **Example**: Prior work focused on either sparse attention patterns or model distillation separately, but not on their synergistic combination.
+  </Step>
+  
+  <Step title="Question 5: What are the key components?">
+    Outline methodology, datasets, and expected outcomes.
+    
+    **Example**: We propose a hybrid approach combining learned sparse attention with knowledge distillation, evaluated on GLUE and SuperGLUE benchmarks.
+  </Step>
+</Steps>
+
+## Benchmark Dataset
+
+The environment includes 100 curated research tasks from ResearchTown:
+
+- **33 Easy Tasks**: Well-defined problems with clear solutions
+- **34 Medium Tasks**: Moderate complexity requiring synthesis
+- **33 Hard Tasks**: Open-ended problems requiring novel insights
+
+### Difficulty Levels
+
+<Tabs>
+  <Tab title="Easy">
+    **Characteristics**:
+    - Clear problem statements
+    - Existing baseline approaches
+    - Well-defined evaluation metrics
+    
+    **Example**: Improving classification accuracy on a standard dataset
+  </Tab>
+  
+  <Tab title="Medium">
+    **Characteristics**:
+    - Multiple possible approaches
+    - Requires combining existing techniques
+    - Some ambiguity in problem formulation
+    
+    **Example**: Cross-lingual transfer learning with limited data
+  </Tab>
+  
+  <Tab title="Hard">
+    **Characteristics**:
+    - Ill-defined problem spaces
+    - Requires novel theoretical insights
+    - Multiple evaluation perspectives
+    
+    **Example**: Emergent capabilities in large language models
+  </Tab>
+</Tabs>
+
+## Implementation Details
+
+### Action Handler Structure
+
+All research actions follow a consistent pattern:
+
+```python
+def _get_paper_by_keyword_handler(
+    self, keyword: str, max_papers: int
+) -> Dict[str, Any]:
+    try:
+        papers = get_paper_by_keyword(
+            keyword=keyword,
+            existing_arxiv_ids=set(),
+            max_papers=max_papers
+        )
+        return {
+            "success": True,
+            "papers": [paper.model_dump(exclude_none=True) for paper in papers]
+        }
+    except ValueError as e:
+        return {"success": False, "error-msg": str(e)}
+```
+
+### Paper Collection Utilities
+
+The environment uses several utility modules:
+
+<CodeGroup>
+```python paper_collector.py
+from marble.environments.research_utils.paper_collector import (
+    get_paper_by_arxiv_id,
+    get_paper_by_keyword,
+    get_paper_by_title,
+    get_recent_papers,
+    get_related_papers
+)
+
+# Search by multiple criteria
+papers = get_related_papers(
+    num_results=50,
+    query="transformer optimization",
+    domain="cs.LG",
+    author="Ilya Sutskever"
+)
+```
+
+```python profile_collector.py
+from marble.environments.research_utils.profile_collector import (
+    collect_publications_and_coauthors
+)
+
+# Gather author information
+paper_abstracts, paper_titles, co_authors = collect_publications_and_coauthors(
+    author="Yann LeCun",
+    known_paper_titles=["LeNet-5"],
+    paper_max_num=50,
+    exclude_known=True
+)
+```
+</CodeGroup>
+
+## Multi-Agent Collaboration Patterns
+
+### Graph-Based Coordination
+
+In graph mode, all agents can communicate:
+
+```yaml
+coordinate_mode: graph
+
+relationships:
+  - [agent1, agent2, "collaborate with"]
+  - [agent1, agent3, "collaborate with"]
+  - [agent2, agent3, "collaborate with"]
+  # Creates fully connected network
+```
+
+### Chain-Based Coordination
+
+Agents collaborate sequentially:
+
+```yaml
+coordinate_mode: chain
+
+relationships:
+  - [agent1, agent2, "leads"]
+  - [agent2, agent3, "leads"]
+  - [agent3, agent4, "leads"]
+  # Creates linear workflow
+```
+
+## Output Format
+
+### Discussion Output (JSONL)
+
+```json discussion_output.jsonl
+{"agent_id": "agent1", "iteration": 1, "message": "Based on my analysis of recent papers, I propose focusing on..."}
+{"agent_id": "agent2", "iteration": 1, "message": "I agree with agent1, and would add that..."}
+{"agent_id": "agent3", "iteration": 2, "message": "Building on these ideas, here's a concrete approach..."}
+{"final_output": "**[Question 1] - What is the problem?**\n..."}
+```
+
+## Evaluation Metrics
+
+The environment supports multiple evaluation dimensions:
+
+```yaml
+metrics:
+  evaluate_llm: gpt-4o-mini
+  relevance: true                    # How relevant to the original paper
+  diversity_of_perspectives: true    # Variety of viewpoints
+  engagement_level: true            # Quality of agent interactions
+  novelty: true                     # Originality of ideas
+  feasibility: true                 # Practicality of proposals
+```
+
+## Best Practices
+
+<Check>Use diverse agent profiles to encourage different perspectives</Check>
+<Check>Set max_iterations based on task complexity (3-10 iterations)</Check>
+<Check>Enable graph coordination for brainstorming, chain for structured analysis</Check>
+<Check>Use specific paper titles or arXiv IDs for precise literature review</Check>
+<Check>Configure rate limiting for API calls to avoid throttling</Check>
+
+## Advanced Features
+
+### Web Content Extraction
+
+The environment includes intelligent web scraping:
+
+```python
+def extract_text_from_html(self, html_content: str) -> str:
+    soup = BeautifulSoup(html_content, "html.parser")
+    
+    # Remove script and style elements
+    for script in soup(["script", "style"]):
+        script.decompose()
+    
+    # Extract and clean text
+    text = soup.get_text(separator=" ", strip=True)
+    return text
+```
+
+### Rate Limiting
+
+Built-in rate limiting prevents API abuse:
+
+```python
+# Rate limiting to avoid excessive requests
+while time.time() - self.last_visited_timestamp < 1:
+    time.sleep(0.5)
+
+response = requests.get(url, headers=headers, timeout=5.0)
+self.last_visited_timestamp = time.time()
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="API rate limiting errors">
+    Add delays between requests:
+    ```python
+    import time
+    time.sleep(1)  # Wait 1 second between requests
+    ```
+  </Accordion>
+  
+  <Accordion title="Paper not found">
+    Try multiple search methods:
+    ```python
+    # Try by title first
+    result = get_paper_by_title("Attention Is All You Need")
+    if not result:
+        # Fall back to keyword search
+        result = get_paper_by_keyword("attention mechanism", max_papers=1)
+    ```
+  </Accordion>
+  
+  <Accordion title="Memory issues with large result sets">
+    Limit the number of results:
+    ```yaml
+    arguments:
+      max_papers: 20  # Instead of 100
+      paper_max_num: 30  # Limit author papers
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="ResearchTown" icon="building" href="https://github.com/ulab-uiuc/ResearchTown">
+    Source of benchmark dataset
+  </Card>
+  <Card title="arXiv API" icon="book" href="https://arxiv.org/help/api">
+    Documentation for paper retrieval
+  </Card>
+  <Card title="MultiAgentBench Paper" icon="file-pdf" href="https://arxiv.org/abs/2503.01935">
+    Research methodology
+  </Card>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/ulab-uiuc/MARBLE">
+    Source code
+  </Card>
+</CardGroup>

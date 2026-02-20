@@ -1,0 +1,643 @@
+---
+title: 'Coding Environment'
+description: 'Software development environment for code generation and review'
+icon: 'code'
+---
+
+## Overview
+
+The Coding environment enables AI agents to collaborate on software development tasks, including code generation, review, testing, and debugging. It provides a structured workspace with role-based tools for different aspects of the development lifecycle.
+
+<Info>
+  Based on `marble/environments/coding_env.py`, this environment provides comprehensive coding tools with support for multiple developer roles.
+</Info>
+
+## Key Features
+
+- **Workspace Management**: Isolated workspace directory for each project
+- **Code Generation**: LLM-powered solution creation from task descriptions
+- **Code Review**: Automated review with suggestions and improvements
+- **Role-Based Actions**: Specialized tools for coders, reviewers, testers, and analysts
+- **Configuration-Driven**: Task requirements loaded from YAML configs
+- **Multi-File Support**: Handle complex projects with multiple files
+
+## Environment Structure
+
+```python
+from marble.environments.coding_env import CodingEnvironment
+
+config = {
+    "workspace_dir": "workspace",
+    "max_iterations": 10,
+    "task_description": "Implement a REST API"
+}
+
+env = CodingEnvironment(config=config, name="CodingEnv")
+```
+
+### Workspace Organization
+
+```
+workspace/
+├── solution.py          # Main implementation
+├── test_solution.py     # Unit tests
+├── advices.json         # Review feedback
+├── requirements.txt     # Dependencies
+└── README.md            # Documentation
+```
+
+## Available Actions
+
+### Coder Actions
+
+<Tabs>
+  <Tab title="Create Solution">
+    Generate initial code from task description:
+    
+    ```python
+    result = env.apply_action(
+        agent_id="coder_agent",
+        action_name="create_solution",
+        arguments={
+            "task_description": "Implement a binary search tree",
+            "model_name": "gpt-4"
+        }
+    )
+    
+    # Returns
+    {
+        "success": True,
+        "message": "Solution file created at workspace/solution.py",
+        "code": "class BinarySearchTree:\n    def __init__(self):\n        ..."
+    }
+    ```
+    
+    **Generated Code**:
+    ```python
+    # Binary Search Tree Implementation
+    # This module provides a complete BST with insertion, deletion, and search
+    
+    class Node:
+        """Node class representing each element in the BST."""
+        def __init__(self, value):
+            self.value = value
+            self.left = None
+            self.right = None
+    
+    class BinarySearchTree:
+        """Binary Search Tree with standard operations."""
+        def __init__(self):
+            self.root = None
+        
+        def insert(self, value):
+            """Insert a value into the BST."""
+            if not self.root:
+                self.root = Node(value)
+            else:
+                self._insert_recursive(self.root, value)
+        
+        def _insert_recursive(self, node, value):
+            if value < node.value:
+                if node.left is None:
+                    node.left = Node(value)
+                else:
+                    self._insert_recursive(node.left, value)
+            else:
+                if node.right is None:
+                    node.right = Node(value)
+                else:
+                    self._insert_recursive(node.right, value)
+    ```
+  </Tab>
+  
+  <Tab title="Revise Solution">
+    Improve existing code based on feedback:
+    
+    ```python
+    # Note: Currently commented out in coder.py
+    # To enable, uncomment the revise_solution_handler function
+    
+    result = env.apply_action(
+        agent_id="coder_agent",
+        action_name="revise_solution",
+        arguments={
+            "task_description": "Add error handling",
+            "model_name": "gpt-4",
+            "file_path": "solution.py"
+        }
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Reviewer Actions
+
+<Accordion title="Review Code">
+  Analyze code and provide suggestions:
+  
+  ```python
+  result = env.apply_action(
+      agent_id="reviewer_agent",
+      action_name="review_code",
+      arguments={
+          "file_path": "solution.py",
+          "model_name": "gpt-4"
+      }
+  )
+  
+  # Returns
+  {
+      "success": True,
+      "suggestions": [
+          "Add docstrings to all methods",
+          "Implement error handling for edge cases",
+          "Consider adding type hints",
+          "Add unit tests for delete operation"
+      ],
+      "overall_quality": "Good structure, needs documentation"
+  }
+  ```
+</Accordion>
+
+## Configuration
+
+### Coding Task Configuration
+
+```yaml coding_config.yaml
+task:
+  content: |
+    Implement a Python class for a binary search tree with the following requirements:
+    
+    1. Implementation requirements:
+       - Node class with value, left, and right attributes
+       - BinarySearchTree class with insert, search, and delete methods
+       - In-order, pre-order, and post-order traversal methods
+       - Method to find minimum and maximum values
+       - Method to calculate tree height
+    
+    2. Project structure:
+       - solution.py: Main implementation
+       - test_solution.py: Unit tests
+       - README.md: Usage documentation
+    
+    3. Code quality requirements:
+       - Clear documentation with docstrings
+       - Type hints for all methods
+       - Proper error handling
+       - Clean, readable code following PEP 8
+    
+    4. Testing requirements:
+       - Test basic operations (insert, search, delete)
+       - Test edge cases (empty tree, single node)
+       - Test traversal methods
+       - Achieve >90% code coverage
+
+environment:
+  type: Coding
+  name: "Software Development Environment"
+  workspace_dir: "workspace"
+  max_iterations: 15
+
+agents:
+  - type: BaseAgent
+    agent_id: coder
+    profile: |
+      You are an experienced Python developer specializing in data structures
+      and algorithms. You write clean, well-documented code following best practices.
+      
+  - type: BaseAgent
+    agent_id: reviewer
+    profile: |
+      You are a senior code reviewer with expertise in software quality assurance.
+      You provide constructive feedback focused on maintainability and correctness.
+
+llm: gpt-3.5-turbo
+
+memory:
+  type: SharedMemory
+```
+
+### Multi-Agent Coding Setup
+
+```yaml
+coordinate_mode: chain
+
+relationships:
+  - [coder, reviewer, "submits_to"]
+  - [reviewer, tester, "approves_for"]
+  - [tester, coder, "reports_to"]
+
+agents:
+  - type: BaseAgent
+    agent_id: coder
+    profile: "Primary developer implementing features"
+    
+  - type: BaseAgent
+    agent_id: reviewer
+    profile: "Code reviewer ensuring quality standards"
+    
+  - type: BaseAgent
+    agent_id: tester
+    profile: "QA engineer writing and running tests"
+    
+  - type: BaseAgent
+    agent_id: debugger
+    profile: "Debugging specialist fixing issues"
+```
+
+## Running Coding Tasks
+
+### Using Shell Scripts
+
+```bash
+cd scripts/coding
+bash run_demo.sh
+```
+
+### Python API Usage
+
+```python
+from marble.environments.coding_env import CodingEnvironment
+
+# Initialize environment
+config = {
+    "workspace_dir": "my_project",
+    "max_iterations": 20,
+    "task_description": "Build a REST API for user management"
+}
+
+env = CodingEnvironment(config=config)
+
+# Coder generates initial solution
+code_result = env.apply_action(
+    agent_id="coder",
+    action_name="create_solution",
+    arguments={
+        "task_description": config["task_description"],
+        "model_name": "gpt-4"
+    }
+)
+
+if code_result["success"]:
+    print(f"Code created: {code_result['message']}")
+    
+    # Reviewer provides feedback
+    review_result = env.apply_action(
+        agent_id="reviewer",
+        action_name="review_code",
+        arguments={
+            "file_path": "solution.py",
+            "model_name": "gpt-4"
+        }
+    )
+    
+    print(f"Review: {review_result['suggestions']}")
+```
+
+## Code Generation Process
+
+### System Prompt Structure
+
+The environment uses structured prompts for code generation:
+
+```python
+system_prompt = (
+    "You are a Python developer. Create a solution based on the following task description.\n"
+    "Your code should be clean, well-documented, and follow Python best practices.\n"
+    "Include explanations of the code and its functionality as inline comments within the code.\n"
+    "Your final output must be enclosed in a markdown code block with the language specified as python.\n"
+    "Ensure that nothing besides the code is inside the markdown code block.\n"
+    f"Task Description:\n{full_task_description}\n\n"
+    f"Implementation Requirements:\n{requirements}\n"
+)
+```
+
+### Code Extraction
+
+Generated code is automatically extracted from markdown blocks:
+
+```python
+# Extract code from markdown
+code_block_match = re.search(r"```python(.*?)```", response, re.DOTALL)
+if code_block_match:
+    code_content = code_block_match.group(1).strip()
+else:
+    code_content = response.strip()
+
+# Write to file
+with open(full_path, "w") as file:
+    file.write(code_content)
+```
+
+## Developer Roles
+
+The environment supports specialized roles:
+
+<Tabs>
+  <Tab title="Coder">
+    **Responsibilities**:
+    - Implement features from specifications
+    - Write clean, maintainable code
+    - Follow coding standards
+    
+    **Available Actions**:
+    - `create_solution`: Generate initial implementation
+    - `revise_solution`: Improve existing code
+    
+    **Registration**:
+    ```python
+    from marble.environments.coding_utils import register_coder_actions
+    register_coder_actions(env)
+    ```
+  </Tab>
+  
+  <Tab title="Reviewer">
+    **Responsibilities**:
+    - Review code quality
+    - Provide constructive feedback
+    - Ensure best practices
+    
+    **Available Actions**:
+    - `review_code`: Analyze and suggest improvements
+    - `check_style`: Verify PEP 8 compliance
+    
+    **Registration**:
+    ```python
+    from marble.environments.coding_utils import register_reviewer_actions
+    register_reviewer_actions(env)
+    ```
+  </Tab>
+  
+  <Tab title="Tester">
+    **Responsibilities**:
+    - Write unit tests
+    - Run test suites
+    - Report coverage
+    
+    **Available Actions** (to be implemented):
+    - `create_tests`: Generate test cases
+    - `run_tests`: Execute test suite
+    - `measure_coverage`: Calculate coverage
+  </Tab>
+  
+  <Tab title="Debugger">
+    **Responsibilities**:
+    - Identify bugs
+    - Fix issues
+    - Verify fixes
+    
+    **Available Actions** (to be implemented):
+    - `analyze_error`: Examine error messages
+    - `suggest_fix`: Propose solutions
+    - `apply_fix`: Implement corrections
+  </Tab>
+</Tabs>
+
+## Implementation Details
+
+### Action Handler Implementation
+
+```python
+def create_solution_handler(
+    env, task_description: str, model_name: str, file_path: str = "solution.py"
+) -> Dict[str, Any]:
+    try:
+        full_path = os.path.join(env.workspace_dir, file_path)
+        
+        # Check if file already exists
+        if os.path.exists(full_path):
+            return {
+                "success": False,
+                "error-msg": f"Solution file already exists at {full_path}"
+            }
+        
+        # Load configuration
+        config_path = "marble/configs/coding_config/coding_config.yaml"
+        with open(config_path, "r") as f:
+            config = yaml.load(f)
+        
+        # Extract requirements
+        full_task_description = config["task"]["content"]
+        requirements = extract_requirements(full_task_description)
+        
+        # Generate code using LLM
+        response = model_prompting(
+            model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Please write the complete Python code for this task."}
+            ],
+            return_num=1,
+            max_token_num=4096,
+            temperature=0.0
+        )[0]
+        
+        # Extract and save code
+        code_content = extract_code_from_response(response.content)
+        with open(full_path, "w") as file:
+            file.write(code_content)
+        
+        return {
+            "success": True,
+            "message": f"Solution file created at {full_path}",
+            "code": code_content
+        }
+        
+    except Exception as e:
+        return {"success": False, "error-msg": str(e)}
+```
+
+### File Path Management
+
+```python
+def _get_file_path(self, filename: str, subdir: Optional[str] = None) -> str:
+    """
+    Constructs the full file path within the workspace.
+    
+    Args:
+        filename: Name of the file
+        subdir: Optional subdirectory within workspace
+    
+    Returns:
+        Full file path
+    """
+    if subdir:
+        full_path = os.path.join(self.workspace_dir, subdir)
+        os.makedirs(full_path, exist_ok=True)
+        return os.path.join(full_path, filename)
+    return os.path.join(self.workspace_dir, filename)
+```
+
+## Best Practices
+
+<Check>Use specific, detailed task descriptions for better code generation</Check>
+<Check>Configure separate models for different roles (e.g., GPT-4 for complex coding, GPT-3.5-turbo for reviews)</Check>
+<Check>Include test requirements in task descriptions</Check>
+<Check>Set up review feedback loops with revise_solution</Check>
+<Check>Use chain coordination for sequential development workflows</Check>
+<Check>Specify code quality requirements explicitly</Check>
+
+## Example Workflows
+
+### Simple Development Flow
+
+<Steps>
+  <Step title="Generate Code">
+    Coder creates initial implementation:
+    ```python
+    code = create_solution(task_description, model="gpt-4")
+    ```
+  </Step>
+  
+  <Step title="Review Code">
+    Reviewer analyzes and suggests improvements:
+    ```python
+    review = review_code(file_path="solution.py", model="gpt-4")
+    ```
+  </Step>
+  
+  <Step title="Revise Code">
+    Coder incorporates feedback:
+    ```python
+    revised = revise_solution(task_description, model="gpt-4")
+    ```
+  </Step>
+  
+  <Step title="Final Verification">
+    Run tests and verify quality:
+    ```python
+    test_results = run_tests()
+    coverage = measure_coverage()
+    ```
+  </Step>
+</Steps>
+
+### Multi-Agent Collaboration
+
+```python
+# Setup multi-agent environment
+config = {
+    "coordinate_mode": "chain",
+    "agents": [
+        {"agent_id": "analyst", "role": "Analyze requirements"},
+        {"agent_id": "coder", "role": "Implement solution"},
+        {"agent_id": "reviewer", "role": "Review code"},
+        {"agent_id": "tester", "role": "Write tests"}
+    ]
+}
+
+# Analyst breaks down requirements
+requirements = analyst.analyze_task(task_description)
+
+# Coder implements
+code = coder.create_solution(requirements)
+
+# Reviewer provides feedback
+feedback = reviewer.review_code(code)
+
+# Coder revises
+revised_code = coder.revise_solution(feedback)
+
+# Tester validates
+test_results = tester.run_tests(revised_code)
+```
+
+## Advanced Features
+
+### Custom Code Templates
+
+Define templates for common patterns:
+
+```python
+CLASS_TEMPLATE = '''
+class {class_name}:
+    """{{description}}"""
+    
+    def __init__(self, {{init_params}}):
+        """Initialize the {{class_name}}."""
+        {{init_body}}
+    
+    def {{method_name}}(self, {{method_params}}):
+        """{{method_description}}"""
+        {{method_body}}
+'''
+```
+
+### Integrated Testing
+
+Run tests automatically after code generation:
+
+```python
+def generate_and_test(env, task_description, model_name):
+    # Generate code
+    code_result = env.apply_action(
+        agent_id="coder",
+        action_name="create_solution",
+        arguments={"task_description": task_description, "model_name": model_name}
+    )
+    
+    if code_result["success"]:
+        # Generate tests
+        test_result = env.apply_action(
+            agent_id="tester",
+            action_name="create_tests",
+            arguments={"file_path": "solution.py"}
+        )
+        
+        # Run tests
+        run_result = env.apply_action(
+            agent_id="tester",
+            action_name="run_tests",
+            arguments={}
+        )
+        
+        return run_result
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Generated code has syntax errors">
+    - Use GPT-4 instead of GPT-3.5-turbo for complex tasks
+    - Make task description more specific
+    - Add examples to the prompt
+    - Lower temperature to 0.0 for more deterministic output
+  </Accordion>
+  
+  <Accordion title="File already exists error">
+    ```python
+    # Check if file exists first
+    if os.path.exists(file_path):
+        os.remove(file_path)  # Or rename/backup
+    
+    # Then create solution
+    result = create_solution(...)
+    ```
+  </Accordion>
+  
+  <Accordion title="Configuration file not found">
+    Ensure config path is correct:
+    ```python
+    config_path = "marble/configs/coding_config/coding_config.yaml"
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Config not found: {config_path}")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Python Best Practices" icon="python" href="https://peps.python.org/pep-0008/">
+    PEP 8 Style Guide
+  </Card>
+  <Card title="Type Hints" icon="check" href="https://docs.python.org/3/library/typing.html">
+    Python typing documentation
+  </Card>
+  <Card title="Unit Testing" icon="flask" href="https://docs.python.org/3/library/unittest.html">
+    unittest framework
+  </Card>
+  <Card title="Source Code" icon="github" href="https://github.com/ulab-uiuc/MARBLE">
+    View on GitHub
+  </Card>
+</CardGroup>

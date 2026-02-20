@@ -1,0 +1,682 @@
+---
+title: Building Custom Environments
+description: Learn how to create custom environments for your multi-agent simulations
+---
+
+This guide explains how to create custom environments in MARBLE by extending the `BaseEnvironment` class and implementing domain-specific functionality.
+
+## Understanding BaseEnvironment
+
+The `BaseEnvironment` class (base_env.py:8) provides the foundation for all environments in MARBLE. It manages:
+
+- **State**: Current environment state and task information
+- **Actions**: Registered action handlers that agents can invoke
+- **Agents**: List of agents operating in the environment
+- **Lifecycle**: Iteration tracking and termination conditions
+
+## Creating a Basic Environment
+
+<Steps>
+  <Step title="Extend BaseEnvironment">
+    Create a new environment class:
+
+    ```python
+    from marble.environments import BaseEnvironment
+    from typing import Any, Dict, Callable
+
+    class DocumentEnvironment(BaseEnvironment):
+        """Environment for collaborative document editing."""
+        
+        def __init__(self, name: str, config: Dict[str, Any]):
+            super().__init__(name, config)
+            
+            # Custom state variables
+            self.documents = {}
+            self.edit_history = []
+            self.current_version = 0
+            
+            # Register custom actions
+            self._register_actions()
+            
+            self.logger = self._setup_logger()
+            self.logger.info(f"DocumentEnvironment '{name}' initialized")
+        
+        def _setup_logger(self):
+            import logging
+            logger = logging.getLogger(self.__class__.__name__)
+            logger.setLevel(logging.INFO)
+            return logger
+    ```
+  </Step>
+
+  <Step title="Register Actions">
+    Define actions that agents can perform:
+
+    ```python
+    def _register_actions(self):
+        """Register all available actions for this environment."""
+        
+        # Register create_document action
+        self.register_action(
+            action_name="create_document",
+            handler=self._create_document,
+            description={
+                "type": "function",
+                "function": {
+                    "name": "create_document",
+                    "description": "Create a new document with given title and content",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "description": "The document title"
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "Initial document content"
+                            }
+                        },
+                        "required": ["title", "content"]
+                    }
+                }
+            }
+        )
+        
+        # Register edit_document action
+        self.register_action(
+            action_name="edit_document",
+            handler=self._edit_document,
+            description={
+                "type": "function",
+                "function": {
+                    "name": "edit_document",
+                    "description": "Edit an existing document",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "description": "The document title to edit"
+                            },
+                            "new_content": {
+                                "type": "string",
+                                "description": "New content for the document"
+                            },
+                            "reason": {
+                                "type": "string",
+                                "description": "Reason for the edit"
+                            }
+                        },
+                        "required": ["title", "new_content"]
+                    }
+                }
+            }
+        )
+        
+        # Register review_document action
+        self.register_action(
+            action_name="review_document",
+            handler=self._review_document,
+            description={
+                "type": "function",
+                "function": {
+                    "name": "review_document",
+                    "description": "Review a document and provide feedback",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "description": "The document title to review"
+                            },
+                            "feedback": {
+                                "type": "string",
+                                "description": "Review feedback"
+                            }
+                        },
+                        "required": ["title", "feedback"]
+                    }
+                }
+            }
+        )
+    ```
+  </Step>
+
+  <Step title="Implement Action Handlers">
+    Create the handler functions for each action:
+
+    ```python
+    def _create_document(self, title: str, content: str) -> Dict[str, Any]:
+        """Create a new document."""
+        if title in self.documents:
+            return {
+                "success": False,
+                "message": f"Document '{title}' already exists"
+            }
+        
+        self.documents[title] = {
+            "content": content,
+            "version": self.current_version,
+            "created_at": self.current_iteration,
+            "last_modified": self.current_iteration
+        }
+        
+        self.edit_history.append({
+            "action": "create",
+            "title": title,
+            "iteration": self.current_iteration
+        })
+        
+        self.logger.info(f"Document '{title}' created")
+        
+        return {
+            "success": True,
+            "message": f"Document '{title}' created successfully",
+            "version": self.current_version
+        }
+    
+    def _edit_document(self, title: str, new_content: str, reason: str = "") -> Dict[str, Any]:
+        """Edit an existing document."""
+        if title not in self.documents:
+            return {
+                "success": False,
+                "message": f"Document '{title}' not found"
+            }
+        
+        # Update document
+        old_content = self.documents[title]["content"]
+        self.documents[title]["content"] = new_content
+        self.documents[title]["last_modified"] = self.current_iteration
+        self.current_version += 1
+        self.documents[title]["version"] = self.current_version
+        
+        # Record in history
+        self.edit_history.append({
+            "action": "edit",
+            "title": title,
+            "reason": reason,
+            "iteration": self.current_iteration,
+            "old_length": len(old_content),
+            "new_length": len(new_content)
+        })
+        
+        self.logger.info(f"Document '{title}' edited: {reason}")
+        
+        return {
+            "success": True,
+            "message": f"Document '{title}' updated to version {self.current_version}",
+            "version": self.current_version,
+            "changes": {
+                "old_length": len(old_content),
+                "new_length": len(new_content)
+            }
+        }
+    
+    def _review_document(self, title: str, feedback: str) -> Dict[str, Any]:
+        """Review a document and provide feedback."""
+        if title not in self.documents:
+            return {
+                "success": False,
+                "message": f"Document '{title}' not found"
+            }
+        
+        # Add review to document metadata
+        if "reviews" not in self.documents[title]:
+            self.documents[title]["reviews"] = []
+        
+        self.documents[title]["reviews"].append({
+            "feedback": feedback,
+            "iteration": self.current_iteration
+        })
+        
+        self.logger.info(f"Document '{title}' reviewed")
+        
+        return {
+            "success": True,
+            "message": f"Review added to '{title}'",
+            "total_reviews": len(self.documents[title]["reviews"])
+        }
+    ```
+  </Step>
+
+  <Step title="Implement Completion Logic">
+    Override methods to define when tasks are completed:
+
+    ```python
+    def is_task_completed(self) -> bool:
+        """Check if the document task is completed."""
+        # Example: Task complete when we have at least one document
+        # with multiple reviews and recent edits
+        
+        if not self.documents:
+            return False
+        
+        for title, doc in self.documents.items():
+            # Check if document has been reviewed
+            reviews = doc.get("reviews", [])
+            if len(reviews) >= 2:  # At least 2 reviews
+                # Check if edits were made after reviews
+                last_review_iter = max([r["iteration"] for r in reviews])
+                if doc["last_modified"] > last_review_iter:
+                    self.logger.info(f"Task completed: '{title}' has been reviewed and refined")
+                    return True
+        
+        return False
+    
+    def get_state(self) -> Dict[str, Any]:
+        """Get current environment state."""
+        state = super().get_state()
+        
+        # Add custom state information
+        state["documents"] = {
+            title: {
+                "content_length": len(doc["content"]),
+                "version": doc["version"],
+                "review_count": len(doc.get("reviews", []))
+            }
+            for title, doc in self.documents.items()
+        }
+        state["total_edits"] = len(self.edit_history)
+        state["current_version"] = self.current_version
+        
+        return state
+    ```
+  </Step>
+
+  <Step title="Register with Engine">
+    Add your environment to the engine's initialization:
+
+    ```python
+    # In engine.py or your custom initialization
+    def _initialize_environment(self, env_config: Dict[str, Any]):
+        env_type = env_config.get("type")
+        
+        if env_type == "Document":
+            from your_module import DocumentEnvironment
+            return DocumentEnvironment(name="Document Environment", config=env_config)
+        elif env_type == "Base":
+            return BaseEnvironment(name="Base Environment", config=env_config)
+        # ... other environment types
+    ```
+
+    Use in configuration:
+
+    ```yaml
+    environment:
+      type: Document
+      name: "Collaborative Document Environment"
+      max_iterations: 10
+      task_description: "Create and refine a technical specification document"
+      ground_truth: "Completed specification with multiple reviews"
+    ```
+  </Step>
+</Steps>
+
+## Advanced Environment Features
+
+### State Management
+
+The base environment provides state management (base_env.py:19-31):
+
+```python
+class SimulationEnvironment(BaseEnvironment):
+    def __init__(self, name: str, config: Dict[str, Any]):
+        super().__init__(name, config)
+        
+        # Initialize custom state
+        self.state["simulation_step"] = 0
+        self.state["entities"] = []
+        self.state["metrics"] = {
+            "efficiency": 0.0,
+            "accuracy": 0.0
+        }
+    
+    def update_state(self, new_data: Dict[str, Any]):
+        """Update environment state with new information."""
+        self.state.update(new_data)
+        self.state["simulation_step"] += 1
+        
+        # Trigger any state-dependent events
+        self._check_state_conditions()
+```
+
+### Action Execution with Validation
+
+The `apply_action` method (base_env.py:70-92) handles action execution:
+
+```python
+class ValidatedEnvironment(BaseEnvironment):
+    def apply_action(
+        self, 
+        agent_id: str, 
+        action_name: str, 
+        arguments: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Execute action with pre/post validation."""
+        
+        # Pre-validation
+        if not self._validate_action_preconditions(action_name, arguments):
+            return {
+                "success": False,
+                "error": "Preconditions not met"
+            }
+        
+        # Execute action
+        result = super().apply_action(agent_id, action_name, arguments)
+        
+        # Post-validation and side effects
+        self._handle_action_effects(action_name, result)
+        
+        return result
+    
+    def _validate_action_preconditions(self, action_name: str, args: Dict[str, Any]) -> bool:
+        """Check if action can be performed."""
+        if action_name == "deploy":
+            return self.state.get("tests_passed", False)
+        return True
+    
+    def _handle_action_effects(self, action_name: str, result: Dict[str, Any]):
+        """Handle side effects of actions."""
+        if action_name == "commit_code" and result.get("success"):
+            self.state["last_commit_time"] = self.current_iteration
+```
+
+### Dynamic Action Registration
+
+Register actions dynamically based on state:
+
+```python
+class AdaptiveEnvironment(BaseEnvironment):
+    def __init__(self, name: str, config: Dict[str, Any]):
+        super().__init__(name, config)
+        self.available_phases = ["planning", "execution", "review"]
+        self.current_phase = "planning"
+        
+        self._register_phase_actions()
+    
+    def _register_phase_actions(self):
+        """Register actions for current phase only."""
+        # Clear previous actions
+        self._action_handlers.clear()
+        self.action_handler_descriptions.clear()
+        
+        if self.current_phase == "planning":
+            self.register_action(
+                "create_plan",
+                self._create_plan,
+                self._make_action_description("create_plan", "Create a project plan")
+            )
+        elif self.current_phase == "execution":
+            self.register_action(
+                "execute_task",
+                self._execute_task,
+                self._make_action_description("execute_task", "Execute a task")
+            )
+        elif self.current_phase == "review":
+            self.register_action(
+                "review_work",
+                self._review_work,
+                self._make_action_description("review_work", "Review completed work")
+            )
+    
+    def advance_phase(self):
+        """Move to next phase."""
+        current_idx = self.available_phases.index(self.current_phase)
+        next_idx = (current_idx + 1) % len(self.available_phases)
+        self.current_phase = self.available_phases[next_idx]
+        
+        # Re-register actions for new phase
+        self._register_phase_actions()
+        
+        self.logger.info(f"Advanced to phase: {self.current_phase}")
+```
+
+### Environment-Specific Completion Criteria
+
+Implement custom completion logic:
+
+```python
+class GoalBasedEnvironment(BaseEnvironment):
+    def __init__(self, name: str, config: Dict[str, Any]):
+        super().__init__(name, config)
+        
+        # Define multiple goals
+        self.goals = config.get("goals", [])
+        self.completed_goals = set()
+    
+    def is_task_completed(self) -> bool:
+        """Task complete when all goals achieved."""
+        return len(self.completed_goals) == len(self.goals)
+    
+    def check_goal_completion(self, goal_id: str) -> bool:
+        """Check if specific goal is met."""
+        goal = next((g for g in self.goals if g["id"] == goal_id), None)
+        if not goal:
+            return False
+        
+        # Check goal criteria
+        criteria = goal.get("criteria", {})
+        for key, expected_value in criteria.items():
+            actual_value = self.state.get(key)
+            if actual_value != expected_value:
+                return False
+        
+        # Mark as completed
+        self.completed_goals.add(goal_id)
+        self.logger.info(f"Goal '{goal_id}' completed")
+        return True
+```
+
+## Real-World Example: Coding Environment
+
+MARBLE includes a `CodingEnvironment` (coding_env.py:1) with sophisticated features:
+
+### File System Operations
+
+```python
+class CodingEnvironment(BaseEnvironment):
+    def __init__(self, name: str, config: Dict[str, Any]):
+        super().__init__(name, config)
+        self.workspace_dir = config.get("workspace_dir", "workspace")
+        
+        # Ensure workspace exists
+        os.makedirs(self.workspace_dir, exist_ok=True)
+        
+        # Register coding actions
+        self._register_coding_actions()
+    
+    def _register_coding_actions(self):
+        self.register_action(
+            "create_code",
+            self._create_code,
+            # ... action description
+        )
+        self.register_action(
+            "give_advice_and_revise_code",
+            self._revise_code,
+            # ... action description
+        )
+```
+
+### Code Analysis Integration
+
+```python
+def _create_code(self, code: str, filename: str = "solution.py") -> Dict[str, Any]:
+    """Create code file and analyze it."""
+    filepath = os.path.join(self.workspace_dir, filename)
+    
+    # Write code
+    with open(filepath, "w") as f:
+        f.write(code)
+    
+    # Analyze code quality
+    from marble.environments.coding_utils.analyst import CodeAnalyst
+    analyst = CodeAnalyst()
+    analysis = analyst.analyze(filepath)
+    
+    return {
+        "success": True,
+        "file": filename,
+        "lines": len(code.split("\n")),
+        "analysis": analysis
+    }
+```
+
+## Best Practices
+
+<Tip>
+  **Action Naming**: Use clear, verb-based names for actions (e.g., `create_document`, `analyze_data`, `submit_report`). This makes agent prompts more intuitive.
+</Tip>
+
+### 1. Comprehensive Action Descriptions
+
+```python
+def _make_action_description(self, name: str, description: str, params: Dict) -> Dict:
+    """Create detailed action description for LLM."""
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": f"{description}. {self._get_usage_example(name)}",
+            "parameters": {
+                "type": "object",
+                "properties": params,
+                "required": list(params.keys())
+            }
+        }
+    }
+
+def _get_usage_example(self, action_name: str) -> str:
+    """Provide usage examples in descriptions."""
+    examples = {
+        "create_document": "Example: create_document(title='Project Plan', content='...')",
+        "edit_document": "Example: edit_document(title='Project Plan', new_content='...', reason='Added milestones')"
+    }
+    return examples.get(action_name, "")
+```
+
+### 2. State Consistency
+
+```python
+def apply_action(self, agent_id: str, action_name: str, arguments: Dict) -> Dict:
+    """Ensure state consistency after actions."""
+    result = super().apply_action(agent_id, action_name, arguments)
+    
+    # Update state consistently
+    self.state["last_action"] = {
+        "agent": agent_id,
+        "action": action_name,
+        "iteration": self.current_iteration
+    }
+    
+    # Validate state integrity
+    self._validate_state_integrity()
+    
+    return result
+
+def _validate_state_integrity(self):
+    """Check state is valid after changes."""
+    assert self.current_iteration >= 0
+    assert len(self.agents) >= 0
+    # Add domain-specific validations
+```
+
+### 3. Proper Resource Cleanup
+
+```python
+class ResourceEnvironment(BaseEnvironment):
+    def __init__(self, name: str, config: Dict[str, Any]):
+        super().__init__(name, config)
+        self.temp_files = []
+        self.connections = []
+    
+    def cleanup(self):
+        """Clean up resources when simulation ends."""
+        # Clean up temporary files
+        for filepath in self.temp_files:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+        
+        # Close connections
+        for conn in self.connections:
+            conn.close()
+        
+        self.logger.info("Environment cleaned up")
+    
+    def __del__(self):
+        """Ensure cleanup on deletion."""
+        self.cleanup()
+```
+
+### 4. Comprehensive Logging
+
+```python
+class LoggedEnvironment(BaseEnvironment):
+    def apply_action(self, agent_id: str, action_name: str, arguments: Dict) -> Dict:
+        self.logger.info(
+            f"Action '{action_name}' called by '{agent_id}' "
+            f"at iteration {self.current_iteration}"
+        )
+        self.logger.debug(f"Arguments: {arguments}")
+        
+        result = super().apply_action(agent_id, action_name, arguments)
+        
+        self.logger.info(f"Result: {result.get('success', 'unknown')}")
+        if not result.get("success"):
+            self.logger.warning(f"Action failed: {result.get('error', 'unknown')}")
+        
+        return result
+```
+
+## Testing Environments
+
+```python
+import unittest
+from your_module import DocumentEnvironment
+
+class TestDocumentEnvironment(unittest.TestCase):
+    def setUp(self):
+        config = {
+            "task_description": "Test task",
+            "max_iterations": 5
+        }
+        self.env = DocumentEnvironment("Test Env", config)
+    
+    def test_create_document(self):
+        result = self.env.apply_action(
+            agent_id="test_agent",
+            action_name="create_document",
+            arguments={"title": "Test Doc", "content": "Test content"}
+        )
+        self.assertTrue(result["success"])
+        self.assertIn("Test Doc", self.env.documents)
+    
+    def test_edit_nonexistent_document(self):
+        result = self.env.apply_action(
+            agent_id="test_agent",
+            action_name="edit_document",
+            arguments={"title": "Nonexistent", "new_content": "New"}
+        )
+        self.assertFalse(result["success"])
+    
+    def test_task_completion(self):
+        # Create and review document
+        self.env.apply_action(
+            "test_agent", "create_document",
+            {"title": "Doc", "content": "Content"}
+        )
+        self.env.apply_action(
+            "test_agent", "review_document",
+            {"title": "Doc", "feedback": "Good"}
+        )
+        
+        # Check completion logic
+        # (will depend on your implementation)
+```
+
+## Next Steps
+
+- See [Creating Custom Agents](/guides/creating-agents) to build agents for your environment
+- Learn about [Evaluation Metrics](/guides/evaluation-metrics) to measure performance
+- Review [Running Simulations](/guides/running-simulations) for integration

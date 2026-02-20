@@ -1,0 +1,476 @@
+---
+title: Creating Custom Agents
+description: Learn how to create and customize agents in MARBLE
+---
+
+This guide covers everything you need to know about creating custom agents, from extending the `BaseAgent` class to implementing specialized behaviors.
+
+## Understanding BaseAgent
+
+All agents in MARBLE inherit from the `BaseAgent` class (base_agent.py:30), which provides core functionality for perception, action, communication, and memory management.
+
+### Key Components
+
+Every agent has:
+
+- **Agent ID**: Unique identifier (`agent_id`)
+- **Profile**: Description of the agent's role and capabilities
+- **Environment**: Reference to the environment it operates in
+- **Memory**: Personal memory for storing experiences
+- **LLM**: Language model for decision-making
+- **Strategy**: Reasoning approach (default, cot, reflexion, react)
+
+## Creating a Basic Custom Agent
+
+<Steps>
+  <Step title="Extend BaseAgent">
+    Create a new class that inherits from `BaseAgent`:
+
+    ```python
+    from marble.agent import BaseAgent
+    from typing import Any, Dict
+
+    class ResearchAgent(BaseAgent):
+        """Custom agent specialized in research tasks."""
+        
+        def __init__(self, config: Dict[str, Any], env, shared_memory=None, model="gpt-4o-mini"):
+            super().__init__(config, env, shared_memory, model)
+            
+            # Add custom attributes
+            self.research_domain = config.get("research_domain", "general")
+            self.expertise_level = config.get("expertise_level", "intermediate")
+            
+            self.logger.info(f"ResearchAgent initialized with domain: {self.research_domain}")
+    ```
+  </Step>
+
+  <Step title="Override perceive() Method">
+    Customize how your agent perceives the environment state:
+
+    ```python
+    def perceive(self, state: Any) -> Any:
+        """Process environment state with domain-specific perception."""
+        task_description = state.get("task_description", "")
+        
+        # Add research-specific perception
+        if self.research_domain in task_description.lower():
+            self.logger.info(f"Task matches my domain: {self.research_domain}")
+            return f"[HIGH PRIORITY] {task_description}"
+        
+        return task_description
+    ```
+  </Step>
+
+  <Step title="Customize act() Method (Optional)">
+    You can override `act()` for complete control over decision-making:
+
+    ```python
+    def act(self, task: str) -> Any:
+        """Make research-specific decisions."""
+        self.logger.info(f"ResearchAgent acting on: {task}")
+        
+        # Add to task history
+        self.task_history.append(task)
+        
+        # Custom system message for research
+        research_prompt = f"""
+        You are {self.agent_id}, a research specialist in {self.research_domain}.
+        Your expertise level is {self.expertise_level}.
+        
+        Task: {task}
+        
+        Previous work: {self.memory.get_memory_str()}
+        
+        Approach this with scientific rigor and cite relevant methodologies.
+        """
+        
+        # Get available actions from environment
+        tools = [
+            self.env.action_handler_descriptions[name]
+            for name in self.env.action_handler_descriptions
+        ]
+        
+        # Call LLM with tools
+        from marble.llms.model_prompting import model_prompting
+        
+        result = model_prompting(
+            llm_model=self.llm,
+            messages=[{"role": "user", "content": research_prompt}],
+            return_num=1,
+            max_token_num=512,
+            temperature=0.7,
+            tools=tools,
+            tool_choice="auto"
+        )[0]
+        
+        # Process result and handle tool calls
+        # (See base_agent.py:242-294 for full implementation)
+        
+        return result.content, None
+    ```
+  </Step>
+
+  <Step title="Use Your Custom Agent">
+    Register your agent in the configuration:
+
+    ```yaml
+    agents:
+      - type: ResearchAgent  # Your custom class name
+        agent_id: research_specialist
+        research_domain: "machine learning"
+        expertise_level: "expert"
+        profile: |
+          I am a research specialist focusing on machine learning.
+          I provide rigorous analysis and cite relevant literature.
+    ```
+
+    Then modify the engine initialization to support your custom type:
+
+    ```python
+    # In engine.py or your custom runner
+    from your_module import ResearchAgent
+
+    def _initialize_agents(self, agent_configs):
+        agents = []
+        for agent_config in agent_configs:
+            agent_type = agent_config.get("type")
+            
+            if agent_type == "ResearchAgent":
+                agent = ResearchAgent(
+                    config=agent_config,
+                    env=self.environment,
+                    model=agent_config.get("llm", self.config.llm)
+                )
+            else:
+                agent = BaseAgent(
+                    config=agent_config,
+                    env=self.environment,
+                    model=agent_config.get("llm", self.config.llm)
+                )
+            
+            agents.append(agent)
+        return agents
+    ```
+  </Step>
+</Steps>
+
+## Advanced Agent Features
+
+### Custom Memory Management
+
+Agents maintain memory of their experiences (base_agent.py:72-73):
+
+```python
+class AnalyticsAgent(BaseAgent):
+    def __init__(self, config, env, shared_memory=None, model="gpt-4o-mini"):
+        super().__init__(config, env, shared_memory, model)
+        
+        # Custom memory structures
+        self.data_cache = {}
+        self.analysis_history = []
+    
+    def act(self, task: str) -> Any:
+        # Store task in custom memory
+        self.analysis_history.append({
+            "task": task,
+            "timestamp": time.time(),
+            "iteration": len(self.task_history)
+        })
+        
+        # Update base memory
+        self.memory.update(self.agent_id, {
+            "type": "analysis_task",
+            "task": task,
+            "cache_size": len(self.data_cache)
+        })
+        
+        # Continue with action logic
+        result, communication = super().act(task)
+        return result, communication
+```
+
+### Implementing Communication Protocols
+
+Agents can communicate using sessions (base_agent.py:319-338):
+
+```python
+class CollaborativeAgent(BaseAgent):
+    def request_help(self, target_agent_id: str, question: str):
+        """Request help from another agent."""
+        session_id = str(uuid.uuid4())
+        
+        # Find target agent through agent graph
+        target_agent = self.agent_graph.agents.get(target_agent_id)
+        
+        if target_agent:
+            message = f"I need help with: {question}"
+            self.send_message(session_id, target_agent, message)
+            self.logger.info(f"Requested help from {target_agent_id}")
+        else:
+            self.logger.warning(f"Target agent {target_agent_id} not found")
+    
+    def receive_message(self, session_id: str, from_agent, message: str):
+        """Handle incoming messages."""
+        super().receive_message(session_id, from_agent, message)
+        
+        # Custom handling
+        if "urgent" in message.lower():
+            self.logger.info(f"URGENT message from {from_agent.agent_id}")
+            # Prioritize this in next action
+```
+
+### Task Planning
+
+Customize how agents plan their next tasks (base_agent.py:602-645):
+
+```python
+class StrategicAgent(BaseAgent):
+    def plan_task(self) -> str:
+        """Plan next task with strategic considerations."""
+        memory_str = self.memory.get_memory_str()
+        task_history_str = ", ".join(self.task_history)
+        
+        # Add strategic context
+        strategic_context = f"""
+        Strategic Analysis:
+        - Completed tasks: {len(self.task_history)}
+        - Token usage: {self.token_usage}
+        - Available agents: {list(self.available_agents.keys())}
+        
+        Consider:
+        1. Which tasks are most critical for overall success?
+        2. What dependencies exist between tasks?
+        3. Should I delegate or tackle this myself?
+        """
+        
+        prompt = f"""
+        You are {self.agent_id}: {self.profile}
+        
+        {strategic_context}
+        
+        Task history: {task_history_str}
+        Memory: {memory_str}
+        
+        What should be the next strategic task?
+        """
+        
+        from marble.llms.model_prompting import model_prompting
+        
+        next_task = model_prompting(
+            llm_model=self.llm,
+            messages=[{"role": "user", "content": prompt}],
+            return_num=1,
+            max_token_num=256,
+            temperature=0.7
+        )[0].content
+        
+        self.logger.info(f"Planned next task: {next_task}")
+        return next_task
+```
+
+## Real-World Example: Werewolf Agent
+
+MARBLE includes a specialized `WerewolfAgent` (werewolf_agent.py:13) for the Werewolf game. Key features:
+
+### Event-Driven Architecture
+
+```python
+class WerewolfAgent:
+    def __init__(self, config, role, log_path, event_bus, shared_memory, env, number, is_villager):
+        self.role = role  # e.g., "wolf", "villager", "seer"
+        self.event_bus = event_bus
+        self.shared_memory = shared_memory
+        
+        # Subscribe to events
+        event_bus.subscribe(self, self.receive_communication)
+```
+
+### Role-Specific Actions
+
+```python
+def act(self, event: Dict[str, Any]) -> Dict[str, Any]:
+    """Take action based on event type and role."""
+    event_type = event.get("event_type", "")
+    
+    if event_type == "werewolf_action" and self.role == "wolf":
+        return self._wolf_action(event)
+    elif event_type == "seer_action" and self.role == "seer":
+        return self._seer_action(event)
+    else:
+        return self._perform_action(event)
+```
+
+### Prompt Templates
+
+Loads YAML templates for different actions (werewolf_agent.py:382-399):
+
+```python
+yaml_paths = {
+    "werewolf_action": "marble/agent/werewolf_prompts/werewolf_action.yaml",
+    "seer_action": "marble/agent/werewolf_prompts/seer_prompt.yaml",
+}
+```
+
+## Best Practices
+
+<Tip>
+  **Profile Design**: Write clear, specific profiles that guide agent behavior. Include:
+  - Expertise areas
+  - Strengths and limitations
+  - Preferred working style
+  - Collaboration patterns
+</Tip>
+
+### 1. Clear Separation of Concerns
+
+```python
+class DataAgent(BaseAgent):
+    """Handle all data operations."""
+    def collect_data(self): pass
+    def validate_data(self): pass
+    def store_data(self): pass
+
+class AnalysisAgent(BaseAgent):
+    """Perform data analysis."""
+    def analyze_trends(self): pass
+    def generate_insights(self): pass
+    def create_report(self): pass
+```
+
+### 2. Robust Error Handling
+
+```python
+def act(self, task: str) -> Any:
+    try:
+        result, communication = super().act(task)
+        
+        # Validate result
+        if not result:
+            self.logger.warning("Empty result, using fallback")
+            result = self._fallback_action(task)
+        
+        return result, communication
+        
+    except Exception as e:
+        self.logger.error(f"Error in action: {e}")
+        # Store error in memory for learning
+        self.memory.update(self.agent_id, {
+            "type": "error",
+            "task": task,
+            "error": str(e)
+        })
+        return "Error occurred", None
+```
+
+### 3. Token Usage Optimization
+
+The base agent tracks token usage (base_agent.py:296-308). Optimize in custom agents:
+
+```python
+class EfficientAgent(BaseAgent):
+    def act(self, task: str) -> Any:
+        # Use shorter prompts
+        if self.token_usage > 10000:
+            self.logger.warning("High token usage, using concise mode")
+            task = task[:500]  # Truncate if needed
+        
+        result, comm = super().act(task)
+        
+        # Log usage
+        self.logger.info(f"Total tokens used: {self.token_usage}")
+        return result, comm
+```
+
+### 4. Testing Custom Agents
+
+```python
+import unittest
+from marble.environments import BaseEnvironment
+
+class TestResearchAgent(unittest.TestCase):
+    def setUp(self):
+        config = {
+            "agent_id": "test_agent",
+            "profile": "Test researcher",
+            "research_domain": "testing"
+        }
+        env_config = {
+            "type": "Base",
+            "task_description": "Test task",
+            "max_iterations": 5
+        }
+        self.env = BaseEnvironment("Test Env", env_config)
+        self.agent = ResearchAgent(config, self.env)
+    
+    def test_initialization(self):
+        self.assertEqual(self.agent.agent_id, "test_agent")
+        self.assertEqual(self.agent.research_domain, "testing")
+    
+    def test_perceive(self):
+        state = {"task_description": "testing task"}
+        result = self.agent.perceive(state)
+        self.assertIn("HIGH PRIORITY", result)
+```
+
+## Common Patterns
+
+### Delegating Agent
+
+```python
+class ManagerAgent(BaseAgent):
+    """Delegates subtasks to specialized agents."""
+    
+    def plan_tasks_for_children(self, task: str) -> Dict[str, str]:
+        """Delegate based on agent profiles."""
+        # Get children profiles
+        children_profiles = {
+            child.agent_id: child.get_profile() 
+            for child in self.children
+        }
+        
+        # Use LLM to assign tasks
+        prompt = f"""
+        Task: {task}
+        
+        Team members:
+        {json.dumps(children_profiles, indent=2)}
+        
+        Assign subtasks to each team member in JSON format:
+        {{
+            "agent_id": "specific task"
+        }}
+        """
+        
+        # Get assignments from LLM
+        # (See base_agent.py:713-755 for full implementation)
+```
+
+### Observer Agent
+
+```python
+class MonitorAgent(BaseAgent):
+    """Monitors other agents and provides oversight."""
+    
+    def __init__(self, config, env, shared_memory=None, model="gpt-4o-mini"):
+        super().__init__(config, env, shared_memory, model)
+        self.observations = []
+    
+    def observe_agents(self, agent_results: Dict[str, Any]):
+        """Analyze other agents' results."""
+        observation = {
+            "timestamp": time.time(),
+            "agents": list(agent_results.keys()),
+            "summary": self._summarize_results(agent_results)
+        }
+        self.observations.append(observation)
+        
+        # Provide feedback if issues detected
+        if self._detect_issues(agent_results):
+            return self._generate_feedback(agent_results)
+```
+
+## Next Steps
+
+- Learn about [Building Custom Environments](/guides/custom-environments)
+- Explore [Evaluation Metrics](/guides/evaluation-metrics)
+- See [Running Simulations](/guides/running-simulations) for integration

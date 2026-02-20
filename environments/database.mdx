@@ -1,0 +1,766 @@
+---
+title: 'Database Diagnosis Environment'
+description: 'Database performance monitoring and diagnosis for multi-agent root cause analysis'
+icon: 'database'
+---
+
+## Overview
+
+The Database environment enables AI agents to diagnose database performance issues through collaborative analysis. It integrates with PostgreSQL, Prometheus metrics, and diagnostic knowledge bases to identify and resolve database anomalies.
+
+<Info>
+  Based on `marble/environments/db_env.py`, this environment provides comprehensive database diagnostic tools. Requires Docker and docker-compose.
+</Info>
+
+## Key Features
+
+- **Live PostgreSQL Database**: Dockerized PostgreSQL with monitoring
+- **Prometheus Metrics**: Real-time performance monitoring
+- **Anomaly Detection**: Automatic detection of performance issues
+- **Diagnostic Knowledge Base**: RAG-based expert knowledge retrieval
+- **Slow Query Analysis**: Identify and analyze slow queries
+- **100 Benchmark Cases**: Curated scenarios across 10 anomaly types
+- **Multi-Agent Collaboration**: Experts collaborate on diagnosis
+
+## Architecture
+
+```mermaid
+graph TD
+    A[Agents] --> B[DB Environment]
+    B --> C[PostgreSQL]
+    B --> D[Prometheus]
+    B --> E[Diagnostic KB]
+    C --> F[pg_stat_statements]
+    C --> G[pg_locks]
+    C --> H[pg_stat_activity]
+    D --> I[Metrics Collection]
+    E --> J[Expert Knowledge]
+```
+
+## Supported Anomaly Types
+
+<Tabs>
+  <Tab title="MISSING_INDEXES">
+    **Symptoms**:
+    - High CPU usage during queries
+    - Slow SELECT operations
+    - Sequential scans instead of index scans
+    
+    **Detection**:
+    ```sql
+    SELECT schemaname, tablename, seq_scan, idx_scan
+    FROM pg_stat_user_tables
+    WHERE seq_scan > idx_scan * 100
+    ORDER BY seq_scan DESC;
+    ```
+  </Tab>
+  
+  <Tab title="LOCK_CONTENTION">
+    **Symptoms**:
+    - High wait times
+    - Blocked queries
+    - Concurrent update conflicts
+    
+    **Detection**:
+    ```sql
+    SELECT blocked_locks.pid AS blocked_pid,
+           blocking_locks.pid AS blocking_pid,
+           blocked_activity.query AS blocked_query
+    FROM pg_locks blocked_locks
+    JOIN pg_stat_activity blocked_activity ON blocked_locks.pid = blocked_activity.pid
+    JOIN pg_locks blocking_locks ON blocked_locks.locktype = blocking_locks.locktype
+    WHERE NOT blocked_locks.granted;
+    ```
+  </Tab>
+  
+  <Tab title="REDUNDANT_INDEXES">
+    **Symptoms**:
+    - Slow INSERT/UPDATE operations
+    - High disk I/O
+    - Increased storage usage
+    
+    **Detection**:
+    ```sql
+    SELECT schemaname, tablename, indexname, idx_scan
+    FROM pg_stat_user_indexes
+    WHERE idx_scan = 0
+    ORDER BY pg_relation_size(indexrelid) DESC;
+    ```
+  </Tab>
+  
+  <Tab title="VACUUM_ISSUES">
+    **Symptoms**:
+    - Table bloat
+    - Slow queries over time
+    - Dead tuple accumulation
+    
+    **Detection**:
+    ```sql
+    SELECT schemaname, tablename, 
+           n_dead_tup, n_live_tup,
+           last_vacuum, last_autovacuum
+    FROM pg_stat_user_tables
+    WHERE n_dead_tup > n_live_tup * 0.1
+    ORDER BY n_dead_tup DESC;
+    ```
+  </Tab>
+  
+  <Tab title="CPU_CONTENTION">
+    **Symptoms**:
+    - High CPU usage
+    - Slow query execution
+    - System resource exhaustion
+    
+    **Metrics**:
+    - `node_cpu_seconds_total`
+    - `process_cpu_seconds_total`
+  </Tab>
+  
+  <Tab title="MEMORY_PRESSURE">
+    **Symptoms**:
+    - Out of memory errors
+    - Swapping activity
+    - Cache eviction
+    
+    **Metrics**:
+    - `node_memory_MemAvailable_bytes`
+    - `node_memory_Cached_bytes`
+  </Tab>
+  
+  <Tab title="IO_BOTTLENECK">
+    **Symptoms**:
+    - High disk I/O wait
+    - Slow reads/writes
+    - Queue depth increase
+    
+    **Metrics**:
+    - `node_disk_io_time_seconds_total`
+    - `node_disk_read_bytes_total`
+    - `node_disk_write_bytes_total`
+  </Tab>
+  
+  <Tab title="NETWORK_ISSUES">
+    **Symptoms**:
+    - High network latency
+    - Packet loss
+    - Bandwidth saturation
+    
+    **Metrics**:
+    - `node_network_receive_bytes_total`
+    - `node_network_transmit_bytes_total`
+  </Tab>
+</Tabs>
+
+## Configuration
+
+### Environment Setup
+
+```yaml database_config.yaml
+environment:
+  type: Database
+  name: "Database Diagnosis Environment"
+  max_iterations: 10
+  
+  # Database initialization
+  init_sql: |
+    CREATE TABLE users (
+      id SERIAL PRIMARY KEY,
+      username VARCHAR(100),
+      email VARCHAR(100)
+    );
+    
+    CREATE TABLE orders (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id),
+      amount DECIMAL(10,2),
+      created_at TIMESTAMP
+    );
+  
+  # Test SQL (optional)
+  test_sql: |
+    INSERT INTO users (username, email) 
+    SELECT 'user_' || i, 'user' || i || '@example.com'
+    FROM generate_series(1, 10000) i;
+  
+  # Anomaly scenarios
+  anomalies:
+    - anomaly: MISSING_INDEXES
+      threads: 1000
+      ncolumn: 1000
+      colsize: 1000
+    
+    - anomaly: LOCK_CONTENTION
+      threads: 500
+      ncolumn: 100
+      colsize: 100
+
+coordinate_mode: graph  # Fully connected expert network
+
+agents:
+  - type: BaseAgent
+    agent_id: cpu_expert
+    profile: |
+      You are a database CPU performance expert. You specialize in:
+      - Query optimization
+      - Index usage analysis
+      - Connection pooling
+      - Resource allocation
+      
+  - type: BaseAgent
+    agent_id: io_expert
+    profile: |
+      You are a database I/O expert. You specialize in:
+      - Disk performance tuning
+      - Buffer cache optimization
+      - Write-ahead log configuration
+      - Storage layout
+      
+  - type: BaseAgent
+    agent_id: query_expert
+    profile: |
+      You are a query optimization expert. You specialize in:
+      - SQL query analysis
+      - Execution plan optimization
+      - Index design
+      - Query rewriting
+
+llm: gpt-3.5-turbo
+
+memory:
+  type: SharedMemory
+```
+
+### Docker Compose Setup
+
+The environment automatically manages Docker containers:
+
+```yaml docker-compose.yml
+version: '3.8'
+
+services:
+  postgres_db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: Test123_456
+      POSTGRES_DB: sysbench
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://test:Test123_456@postgres_db:5432/sysbench?sslmode=disable"
+    ports:
+      - "9187:9187"
+
+volumes:
+  postgres_data:
+```
+
+## Available Actions
+
+### Query Database
+
+```python
+result = env.apply_action(
+    agent_id="query_expert",
+    action_name="query_db",
+    arguments={
+        "sql": """
+            SELECT query, total_exec_time, calls
+            FROM pg_stat_statements
+            WHERE query LIKE 'SELECT%'
+            ORDER BY total_exec_time DESC
+            LIMIT 10;
+        """
+    }
+)
+
+# Returns
+{
+    "status": "success",
+    "function_name": "query_db",
+    "explanation": "Your query on the database was successful. \nResult: [('SELECT * FROM orders', 1234.56, 100), ...]"
+}
+```
+
+### Useful Database Queries
+
+<AccordionGroup>
+  <Accordion title="Slowest Queries">
+    ```sql
+    SELECT query, 
+           total_exec_time,
+           calls,
+           mean_exec_time,
+           max_exec_time
+    FROM pg_stat_statements
+    ORDER BY total_exec_time DESC
+    LIMIT 10;
+    ```
+  </Accordion>
+  
+  <Accordion title="Lock Waits">
+    ```sql
+    SELECT blocked_locks.pid AS blocked_pid,
+           blocked_activity.usename AS blocked_user,
+           blocking_locks.pid AS blocking_pid,
+           blocking_activity.usename AS blocking_user,
+           blocked_activity.query AS blocked_statement
+    FROM pg_catalog.pg_locks blocked_locks
+    JOIN pg_catalog.pg_stat_activity blocked_activity ON blocked_locks.pid = blocked_activity.pid
+    JOIN pg_catalog.pg_locks blocking_locks ON blocked_locks.locktype = blocking_locks.locktype
+    JOIN pg_catalog.pg_stat_activity blocking_activity ON blocking_locks.pid = blocking_activity.pid
+    WHERE NOT blocked_locks.granted;
+    ```
+  </Accordion>
+  
+  <Accordion title="Index Usage">
+    ```sql
+    SELECT schemaname,
+           tablename,
+           indexname,
+           idx_scan,
+           idx_tup_read,
+           idx_tup_fetch,
+           pg_size_pretty(pg_relation_size(indexrelid)) AS index_size
+    FROM pg_stat_user_indexes
+    ORDER BY idx_scan ASC, pg_relation_size(indexrelid) DESC;
+    ```
+  </Accordion>
+  
+  <Accordion title="Table Bloat">
+    ```sql
+    SELECT schemaname,
+           tablename,
+           n_live_tup,
+           n_dead_tup,
+           ROUND(n_dead_tup * 100.0 / NULLIF(n_live_tup + n_dead_tup, 0), 2) AS dead_tuple_percent,
+           last_vacuum,
+           last_autovacuum
+    FROM pg_stat_user_tables
+    WHERE n_dead_tup > 0
+    ORDER BY n_dead_tup DESC;
+    ```
+  </Accordion>
+  
+  <Accordion title="Active Queries">
+    ```sql
+    SELECT pid,
+           usename,
+           application_name,
+           state,
+           query_start,
+           state_change,
+           query
+    FROM pg_stat_activity
+    WHERE state != 'idle'
+    ORDER BY query_start;
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Running Diagnosis
+
+### Prerequisites
+
+```bash
+# Install Docker
+sudo apt-get update
+sudo apt-get install docker.io docker-compose
+
+# Add user to docker group (optional)
+sudo usermod -aG docker $USER
+
+# Set environment variables
+export OPENAI_API_KEY="your_key"
+export FIREWORKS_AI_API_KEY="your_key"  # Optional
+```
+
+### Start Simulation
+
+```bash
+cd scripts/database
+bash run_simulation.sh
+```
+
+### Python API
+
+```python
+from marble.environments.db_env import DBEnvironment
+
+# Initialize with anomaly scenario
+config = {
+    "init_sql": """
+        CREATE TABLE test_table (
+            id SERIAL PRIMARY KEY,
+            data TEXT
+        );
+    """,
+    "anomalies": [
+        {
+            "anomaly": "MISSING_INDEXES",
+            "threads": 1000,
+            "ncolumn": 1000,
+            "colsize": 1000
+        }
+    ]
+}
+
+env = DBEnvironment(config=config, name="DBDiagnosisEnv")
+
+# Wait for alerts
+print("Waiting for anomaly detection...")
+
+# Query for slow queries
+result = env.apply_action(
+    agent_id="query_expert",
+    action_name="query_db",
+    arguments={
+        "sql": """
+            SELECT query, mean_exec_time
+            FROM pg_stat_statements
+            WHERE mean_exec_time > 100
+            ORDER BY mean_exec_time DESC
+            LIMIT 5;
+        """
+    }
+)
+
+print(result["explanation"])
+
+# Cleanup
+env.terminate()
+```
+
+## Diagnostic Workflow
+
+<Steps>
+  <Step title="Environment Initialization">
+    Docker containers start, database initializes:
+    ```python
+    # Automatic startup
+    subprocess.run(["sudo", "docker", "compose", "up", "-d"])
+    
+    # Wait for database
+    while not check_db_connection():
+        time.sleep(1)
+    
+    # Create extension
+    cursor.execute("CREATE EXTENSION pg_stat_statements;")
+    ```
+  </Step>
+  
+  <Step title="Anomaly Injection">
+    Trigger the configured anomaly:
+    ```python
+    subprocess.run([
+        "python", "main.py",
+        "--anomaly", "MISSING_INDEXES",
+        "--threads", "1000",
+        "--ncolumn", "1000",
+        "--colsize", "1000"
+    ])
+    ```
+  </Step>
+  
+  <Step title="Alert Detection">
+    Prometheus detects anomalies:
+    ```python
+    alerts = get_raw_alerts()
+    for alert in alerts:
+        print(f"Alert: {alert['labels']['alertname']}")
+        print(f"Description: {alert['annotations']['description']}")
+    ```
+  </Step>
+  
+  <Step title="Multi-Agent Analysis">
+    Experts collaborate on diagnosis:
+    ```python
+    # CPU expert checks metrics
+    cpu_analysis = cpu_expert.detect_metric_abnormality("cpu")
+    
+    # I/O expert checks disk
+    io_analysis = io_expert.detect_metric_abnormality("io")
+    
+    # Query expert finds slow queries
+    slow_queries = query_expert.get_slow_queries()
+    ```
+  </Step>
+  
+  <Step title="Root Cause Identification">
+    Knowledge base provides context:
+    ```python
+    # Query diagnostic KB
+    knowledge = kb.search("high cpu usage", expert="CpuExpert")
+    
+    # Analyze and propose solution
+    solution = synthesize_diagnosis([
+        cpu_analysis,
+        io_analysis,
+        slow_queries,
+        knowledge
+    ])
+    ```
+  </Step>
+</Steps>
+
+## Diagnostic Knowledge Base
+
+The environment includes expert knowledge through RAG:
+
+```python
+from marble.environments.db_utils.diagnostic_kb import DiagnosticKB
+
+kb = DiagnosticKB()
+
+# Search for relevant knowledge
+results = kb.search(
+    query="high cpu usage in queries",
+    expert="CpuExpert"
+)
+
+for result in results:
+    print(f"Cause: {result['cause_name']}")
+    print(f"Metrics: {result['metrics']}")
+    print(f"Expert: {result['expert']}")
+    print(f"Solution: {result['solution']}")
+```
+
+### Expert Types
+
+<Tabs>
+  <Tab title="ConfigurationExpert">
+    Database configuration and tuning parameters
+  </Tab>
+  <Tab title="CpuExpert">
+    CPU usage, query optimization, connection management
+  </Tab>
+  <Tab title="DiskExpert">
+    Storage performance, tablespace management
+  </Tab>
+  <Tab title="IndexExpert">
+    Index design, usage analysis, maintenance
+  </Tab>
+  <Tab title="IoExpert">
+    I/O performance, buffer cache, write patterns
+  </Tab>
+  <Tab title="MemoryExpert">
+    Memory allocation, cache hit rates, shared buffers
+  </Tab>
+  <Tab title="QueryExpert">
+    Query performance, execution plans, optimization
+  </Tab>
+  <Tab title="RecoveryExpert">
+    WAL, checkpoints, crash recovery
+  </Tab>
+  <Tab title="WorkloadExpert">
+    Workload patterns, resource contention
+  </Tab>
+</Tabs>
+
+## Metrics Collection
+
+Prometheus metrics are accessed through the API:
+
+```python
+# Get metric data for last 10 minutes
+def get_metric_data_for_last_10_minutes(metric_name: str):
+    end_time = time.time()
+    start_time = end_time - 600
+    
+    prom_url = "http://localhost:9090/api/v1/query_range"
+    params = {
+        "query": metric_name,
+        "start": start_time,
+        "end": end_time,
+        "step": 1
+    }
+    
+    response = requests.get(prom_url, params=params)
+    return response.json()["data"]["result"][0]["values"]
+
+# Detect anomalies
+from marble.environments.db_utils.anomaly_detection import detect_anomalies
+
+data = get_metric_data_for_last_10_minutes("node_cpu_seconds_total")
+data_list = [float(v) for t, v in data]
+anomalies = detect_anomalies(np.array(data_list))
+
+if anomalies["anomalies"]:
+    print(f"Anomalies detected at indices: {anomalies['anomalies']}")
+```
+
+### Available Metrics
+
+<CodeGroup>
+```python CPU Metrics
+full_metrics_full_names["cpu"] = {
+    "CPU User Time": "node_cpu_seconds_total{mode='user'}",
+    "CPU System Time": "node_cpu_seconds_total{mode='system'}",
+    "CPU Iowait": "node_cpu_seconds_total{mode='iowait'}",
+    "CPU Idle": "node_cpu_seconds_total{mode='idle'}"
+}
+```
+
+```python Memory Metrics
+full_metrics_full_names["memory"] = {
+    "Memory Available": "node_memory_MemAvailable_bytes",
+    "Memory Cached": "node_memory_Cached_bytes",
+    "Memory Free": "node_memory_MemFree_bytes",
+    "Memory Buffers": "node_memory_Buffers_bytes"
+}
+```
+
+```python I/O Metrics
+full_metrics_full_names["io"] = {
+    "Disk Read Bytes": "node_disk_read_bytes_total",
+    "Disk Write Bytes": "node_disk_write_bytes_total",
+    "Disk IO Time": "node_disk_io_time_seconds_total"
+}
+```
+
+```python Network Metrics
+full_metrics_full_names["network"] = {
+    "Network Receive": "node_network_receive_bytes_total",
+    "Network Transmit": "node_network_transmit_bytes_total",
+    "Network Errors": "node_network_receive_errs_total"
+}
+```
+</CodeGroup>
+
+## Output and Evaluation
+
+### Result Structure
+
+```
+marble/result/
+├── result_gpt-3.5-turbo/
+│   ├── diagnosis_001.json
+│   ├── diagnosis_002.json
+│   └── ...
+├── result_gpt-4o-mini/
+│   └── ...
+├── result-llama-3.1-70b/
+│   └── ...
+└── batch_eval.py
+```
+
+### Evaluation
+
+```python batch_eval.py
+import json
+import os
+from pathlib import Path
+
+def evaluate_diagnosis(result_dir):
+    results = []
+    
+    for file in Path(result_dir).glob("*.json"):
+        with open(file) as f:
+            diagnosis = json.load(f)
+        
+        # Evaluate correctness
+        correct = diagnosis["identified_cause"] == diagnosis["ground_truth"]
+        
+        # Calculate metrics
+        results.append({
+            "file": file.name,
+            "correct": correct,
+            "confidence": diagnosis.get("confidence", 0),
+            "time_taken": diagnosis.get("time_taken", 0)
+        })
+    
+    accuracy = sum(r["correct"] for r in results) / len(results)
+    avg_time = sum(r["time_taken"] for r in results) / len(results)
+    
+    print(f"Accuracy: {accuracy:.2%}")
+    print(f"Average Time: {avg_time:.2f}s")
+    
+    return results
+```
+
+## Best Practices
+
+<Check>Use sudo privileges carefully - consider rootless Docker</Check>
+<Check>Start with simple anomalies before complex scenarios</Check>
+<Check>Monitor Docker resource usage during diagnosis</Check>
+<Check>Configure separate models for different expert types</Check>
+<Check>Implement timeout handling for long-running queries</Check>
+<Check>Clean up Docker containers after each run</Check>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Docker permission denied">
+    ```bash
+    # Add user to docker group
+    sudo usermod -aG docker $USER
+    newgrp docker
+    
+    # Or use sudo for docker commands
+    sudo docker ps
+    ```
+  </Accordion>
+  
+  <Accordion title="Database connection failed">
+    ```python
+    # Check if database is running
+    docker ps | grep postgres
+    
+    # Check logs
+    docker logs db_env_docker-postgres_db-1
+    
+    # Test connection
+    psql -h localhost -U test -d sysbench
+    ```
+  </Accordion>
+  
+  <Accordion title="No alerts detected">
+    The anomaly may not be severe enough. Try:
+    ```yaml
+    anomalies:
+      - anomaly: MISSING_INDEXES
+        threads: 2000  # Increase load
+        ncolumn: 2000
+        colsize: 2000
+    ```
+  </Accordion>
+  
+  <Accordion title="Prometheus not accessible">
+    ```bash
+    # Check Prometheus status
+    curl http://localhost:9090/-/healthy
+    
+    # View metrics
+    curl http://localhost:9090/api/v1/query?query=up
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="DB-GPT" icon="database" href="https://github.com/TsinghuaDatabaseGroup/DB-GPT">
+    Original DB-GPT project
+  </Card>
+  <Card title="PostgreSQL Docs" icon="book" href="https://www.postgresql.org/docs/">
+    PostgreSQL documentation
+  </Card>
+  <Card title="Prometheus" icon="chart-line" href="https://prometheus.io/docs/">
+    Prometheus monitoring
+  </Card>
+  <Card title="Source Code" icon="github" href="https://github.com/ulab-uiuc/MARBLE">
+    View on GitHub
+  </Card>
+</CardGroup>

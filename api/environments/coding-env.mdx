@@ -1,0 +1,376 @@
+---
+title: "CodingEnvironment"
+description: "Enhanced environment for code development with integrated coder and reviewer actions"
+---
+
+## Overview
+
+`CodingEnvironment` extends `BaseEnvironment` to provide a comprehensive coding environment with tools for creating and reviewing code solutions. It includes automatic workspace management and integrates specialized coding utilities.
+
+## Class Definition
+
+```python
+class CodingEnvironment(BaseEnvironment):
+    def __init__(self, config: Dict[str, Any], name: str = "CodingEnv")
+```
+
+## Constructor
+
+### `__init__(config, name)`
+
+Initialize a new coding environment.
+
+<ParamField path="config" type="Dict[str, Any]" required>
+  Configuration dictionary supporting all BaseEnvironment config options plus:
+  - `workspace_dir`: Directory for code files (default: "workspace")
+  - `description`: Environment description
+  - `task_description`: Coding task description
+  - `ground_truth`: Expected solution
+  - `max_iterations`: Maximum iterations
+</ParamField>
+
+<ParamField path="name" type="str" default="CodingEnv">
+  Name of the environment
+</ParamField>
+
+### Example
+
+```python
+from marble.environments.coding_env import CodingEnvironment
+
+config = {
+    "workspace_dir": "my_workspace",
+    "task_description": "Implement a binary search algorithm",
+    "max_iterations": 15
+}
+
+env = CodingEnvironment(config=config, name="BinarySearchEnv")
+```
+
+## Properties
+
+<ResponseField name="workspace_dir" type="str">
+  Path to the workspace directory where code files are stored. Created automatically if it doesn't exist.
+</ResponseField>
+
+<ResponseField name="config" type="Dict[str, Any]">
+  Configuration dictionary passed during initialization
+</ResponseField>
+
+Inherits all properties from [BaseEnvironment](/api/environments/base-env).
+
+## Registered Actions
+
+CodingEnvironment automatically registers the following actions during initialization:
+
+### `create_solution`
+
+Creates a `solution.py` file and generates code content based on task description.
+
+<ParamField path="task_description" type="str" required>
+  Description of the coding task. The full task is read from the config file at `marble/configs/coding_config/coding_config.yaml`.
+</ParamField>
+
+<ParamField path="model_name" type="str" required>
+  Name of the LLM model to use for code generation (e.g., "gpt-3.5-turbo", "gpt-4")
+</ParamField>
+
+<ResponseField name="success" type="bool">
+  Whether the operation succeeded
+</ResponseField>
+
+<ResponseField name="message" type="str">
+  Success message with file path
+</ResponseField>
+
+<ResponseField name="code" type="str">
+  Generated code content
+</ResponseField>
+
+<ResponseField name="error-msg" type="str">
+  Error message if operation failed
+</ResponseField>
+
+#### Example Usage
+
+```python
+result = env.apply_action(
+    agent_id="coder_agent",
+    action_name="create_solution",
+    arguments={
+        "task_description": "Implement quicksort",
+        "model_name": "gpt-4"
+    }
+)
+
+if result["success"]:
+    print(f"Solution created: {result['message']}")
+    print(f"Code:\n{result['code']}")
+else:
+    print(f"Error: {result['error-msg']}")
+```
+
+### `give_advice_and_revise`
+
+Reviews the existing `solution.py` file, provides improvement suggestions, and automatically revises the code.
+
+<ParamField path="task_description" type="str" required>
+  Task description (read from config file)
+</ParamField>
+
+<ParamField path="model_name" type="str" required>
+  Name of the LLM model to use for review
+</ParamField>
+
+<ResponseField name="success" type="bool">
+  Whether the operation succeeded
+</ResponseField>
+
+<ResponseField name="message" type="str">
+  Success message indicating where suggestions and revised code were saved
+</ResponseField>
+
+<ResponseField name="original_code" type="str">
+  The code before revision
+</ResponseField>
+
+<ResponseField name="suggestion" type="str">
+  Review suggestion in format:
+  - LOCATION: Specific code section
+  - ISSUE: Problem description
+  - SUGGESTION: How to fix
+</ResponseField>
+
+<ResponseField name="strategy" type="Dict[str, Any]">
+  Modification strategy containing:
+  - `strategies`: List of modifications
+    - `action`: "add", "delete", or "replace"
+    - `target`: Code location with context
+    - `new_code`: Replacement code
+</ResponseField>
+
+<ResponseField name="error-msg" type="str">
+  Error message if operation failed
+</ResponseField>
+
+#### Example Usage
+
+```python
+result = env.apply_action(
+    agent_id="reviewer_agent",
+    action_name="give_advice_and_revise",
+    arguments={
+        "task_description": "Implement quicksort",
+        "model_name": "gpt-4"
+    }
+)
+
+if result["success"]:
+    print(f"Review completed: {result['message']}")
+    print(f"\nSuggestion:\n{result['suggestion']}")
+    print(f"\nStrategy: {result['strategy']}")
+else:
+    print(f"Error: {result['error-msg']}")
+```
+
+## Methods
+
+### `register_standard_actions()`
+
+Registers all standard coding actions. Called automatically during initialization.
+
+```python
+def register_standard_actions(self) -> None
+```
+
+Currently registers:
+- `create_solution` - For code generation
+- `give_advice_and_revise` - For code review and revision
+
+### `_get_file_path(filename, subdir)`
+
+Internal helper to construct file paths within the workspace.
+
+```python
+def _get_file_path(self, filename: str, subdir: Optional[str] = None) -> str
+```
+
+<ParamField path="filename" type="str" required>
+  Name of the file
+</ParamField>
+
+<ParamField path="subdir" type="Optional[str]">
+  Optional subdirectory within workspace
+</ParamField>
+
+<ResponseField name="return" type="str">
+  Full file path
+</ResponseField>
+
+Inherits all methods from [BaseEnvironment](/api/environments/base-env).
+
+## Workspace Structure
+
+The CodingEnvironment creates and manages the following workspace structure:
+
+```
+workspace/
+├── solution.py         # Generated solution code
+└── advices.json        # Review history with suggestions and strategies
+```
+
+### advices.json Format
+
+The review history is stored as a JSON array:
+
+```json
+[
+  {
+    "task_description": "Full task description",
+    "file_path": "solution.py",
+    "timestamp": "2024-02-20 10:30:00",
+    "suggestion": "LOCATION: ..\nISSUE: ..\nSUGGESTION: ..",
+    "strategy": {
+      "strategies": [
+        {
+          "action": "replace",
+          "target": {
+            "code": "code to modify",
+            "before_context": "context before",
+            "after_context": "context after"
+          },
+          "new_code": "improved code"
+        }
+      ]
+    }
+  }
+]
+```
+
+## Code Generation Process
+
+### Create Solution Workflow
+
+1. Checks if `solution.py` already exists (fails if it does)
+2. Loads full task description from config file
+3. Extracts implementation requirements
+4. Generates code using specified LLM model
+5. Extracts code from markdown code blocks
+6. Writes to `workspace/solution.py`
+
+### Review and Revision Workflow
+
+1. Reads existing `solution.py` content
+2. Loads task description and requirements from config
+3. **Generate Suggestion**: Uses LLM to provide ONE critical suggestion
+4. **Generate Strategy**: Uses LLM to create specific modification strategy in JSON format
+5. **Apply Modifications**: Applies changes using context-aware pattern matching
+6. Saves revised code to `solution.py`
+7. Appends suggestion and strategy to `advices.json`
+
+## Configuration File
+
+The environment expects a configuration file at `marble/configs/coding_config/coding_config.yaml`:
+
+```yaml
+task:
+  content: |
+    # Task Description
+    
+    1. Implementation requirements:
+    - Requirement 1
+    - Requirement 2
+    - Requirement 3
+    
+    2. Project structure:
+    - File organization
+```
+
+## Complete Example
+
+Here's a complete example of using CodingEnvironment:
+
+```python
+from marble.environments.coding_env import CodingEnvironment
+
+# Initialize environment
+config = {
+    "workspace_dir": "quicksort_workspace",
+    "task_description": "Implement quicksort algorithm",
+    "max_iterations": 10
+}
+
+env = CodingEnvironment(config=config, name="QuicksortEnv")
+
+# Step 1: Create initial solution
+result = env.apply_action(
+    agent_id="coder",
+    action_name="create_solution",
+    arguments={
+        "task_description": "quicksort",
+        "model_name": "gpt-4"
+    }
+)
+
+if result["success"]:
+    print("Initial solution created")
+    print(f"Code length: {len(result['code'])} characters")
+
+# Step 2: Review and revise
+for iteration in range(3):
+    result = env.apply_action(
+        agent_id="reviewer",
+        action_name="give_advice_and_revise",
+        arguments={
+            "task_description": "quicksort",
+            "model_name": "gpt-4"
+        }
+    )
+    
+    if result["success"]:
+        print(f"\nIteration {iteration + 1}:")
+        print(f"Suggestion: {result['suggestion']}")
+    else:
+        print(f"Review failed: {result['error-msg']}")
+        break
+
+print(f"\nEnvironment done: {env.is_done()}")
+print(f"Current iteration: {env.current_iteration}/{env.max_iterations}")
+```
+
+## Error Handling
+
+Common errors and how to handle them:
+
+### Solution Already Exists
+
+```python
+result = env.apply_action(
+    agent_id="coder",
+    action_name="create_solution",
+    arguments={"task_description": "task", "model_name": "gpt-4"}
+)
+
+if not result["success"] and "already exists" in result["error-msg"]:
+    print("Solution file exists, use give_advice_and_revise instead")
+```
+
+### Config File Not Found
+
+```python
+if not result["success"] and "Config file not found" in result["error-msg"]:
+    print("Create marble/configs/coding_config/coding_config.yaml")
+```
+
+### Invalid JSON Strategy
+
+```python
+if not result["success"] and "Invalid JSON format" in result["error-msg"]:
+    print("LLM returned invalid modification strategy, retry with different model")
+```
+
+## See Also
+
+- [BaseEnvironment](/api/environments/base-env) - Parent class documentation
+- [ResearchEnvironment](/api/environments/research-env) - Research paper environment
+- [Agent API](/api/agents/base-agent) - Agent implementation

@@ -1,0 +1,267 @@
+---
+title: 'System Architecture'
+description: 'Understand the overall architecture of MARBLE and how components interact'
+icon: 'diagram-project'
+---
+
+## Overview
+
+MARBLE (Multi-Agent Reasoning and Behavior Learning Environment) is a comprehensive framework for building and orchestrating multi-agent systems. The architecture follows a modular design with clear separation of concerns between coordination, execution, and evaluation.
+
+## High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Engine (Coordinator)                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │   Planner    │  │  Evaluator   │  │  AgentGraph  │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+                           │
+          ┌────────────────┼────────────────┐
+          ▼                ▼                ▼
+    ┌─────────┐      ┌─────────┐      ┌─────────┐
+    │ Agent 1 │◄────►│ Agent 2 │◄────►│ Agent 3 │
+    └─────────┘      └─────────┘      └─────────┘
+          │                │                │
+          └────────────────┼────────────────┘
+                           ▼
+                   ┌───────────────┐
+                   │  Environment  │
+                   └───────────────┘
+                           │
+          ┌────────────────┼────────────────┐
+          ▼                ▼                ▼
+    ┌──────────┐    ┌──────────┐    ┌──────────┐
+    │  Memory  │    │  Actions │    │  State   │
+    └──────────┘    └──────────┘    └──────────┘
+```
+
+## Core Components
+
+### Engine
+
+The Engine is the central orchestrator that coordinates all components. It manages the simulation lifecycle and implements different coordination modes.
+
+```python marble/engine/engine.py
+class Engine:
+    """
+    The Engine class orchestrates the simulation, coordinating agents and the environment.
+    """
+    
+    def __init__(self, config: Config):
+        self.logger = get_logger(self.__class__.__name__)
+        self.config = config
+        self.planning_method = config.engine_planner.get("planning_method", "naive")
+        
+        # Initialize Environment
+        self.environment = self._initialize_environment(config.environment)
+        
+        # Initialize Agents
+        self.agents = self._initialize_agents(config.agents)
+        
+        # Initialize AgentGraph
+        self.graph = AgentGraph(self.agents, config)
+        
+        # Initialize Memory
+        self.memory = self._initialize_memory(config.memory)
+        
+        # Initialize Evaluator
+        self.evaluator = Evaluator(metrics_config=config.metrics)
+        
+        # Initialize EnginePlanner
+        self.planner = EnginePlanner(
+            agent_graph=self.graph,
+            memory=self.memory,
+            config=config.engine_planner,
+            task=self.task,
+            model=config.llm,
+        )
+```
+
+See [marble/engine/engine.py:61-96](/home/daytona/workspace/source/marble/engine/engine.py#L61-L96)
+
+### Agents
+
+Agents are autonomous entities that can perceive, reason, and act within environments. Each agent has:
+
+- **Profile**: Defines capabilities and role
+- **Memory**: Stores experiences and knowledge
+- **Relationships**: Connections to other agents
+- **Actions**: Available operations in the environment
+
+### Environment
+
+Environments provide the context and interface for agent interactions. They manage:
+
+- **State**: Current world state
+- **Actions**: Available operations
+- **Feedback**: Results of agent actions
+
+### Memory Systems
+
+MARBLE supports multiple memory types:
+
+- **Base Memory**: Simple sequential storage
+- **Short-term Memory**: Automatic summarization of old information
+- **Long-term Memory**: Semantic retrieval using embeddings
+- **Shared Memory**: Thread-safe multi-agent communication
+
+## Coordination Modes
+
+MARBLE supports four distinct coordination patterns:
+
+### 1. Star (Centralized)
+
+```python
+def star_coordinate(self) -> None:
+    """Centralized coordination mode."""
+    # Planner assigns tasks to all agents
+    assignment = self.planner.assign_tasks(
+        planning_method=self.planning_method
+    )
+    tasks = assignment.get("tasks", {})
+    
+    # Execute tasks
+    for agent_id, task in tasks.items():
+        agent = self.graph.get_agent(agent_id)
+        result, communication = agent.act(task)
+```
+
+See [marble/engine/engine.py:494-653](/home/daytona/workspace/source/marble/engine/engine.py#L494-L653)
+
+**Best for**: Tasks requiring centralized control and coordination
+
+### 2. Graph (Decentralized)
+
+```python
+def graph_coordinate(self) -> None:
+    """Graph-based coordination mode."""
+    for agent in current_agents:
+        # Each agent plans its own task
+        task = agent.plan_task()
+        
+        # Agent acts on the planned task
+        result, communication = agent.act(task)
+```
+
+See [marble/engine/engine.py:200-492](/home/daytona/workspace/source/marble/engine/engine.py#L200-L492)
+
+**Best for**: Distributed problem-solving with peer collaboration
+
+### 3. Chain (Sequential)
+
+```python
+def chain_coordinate(self) -> None:
+    """Chain-based coordination mode."""
+    current_agent = self._select_initial_agent()
+    
+    while current_agent and chain_length < max_chain_length:
+        result, communication = current_agent.act(task)
+        
+        # Current agent chooses the next agent
+        next_agent_id, plan = current_agent.plan_next_agent(
+            result, agent_profiles
+        )
+        current_agent = self.graph.get_agent(next_agent_id)
+        task = plan
+```
+
+See [marble/engine/engine.py:655-813](/home/daytona/workspace/source/marble/engine/engine.py#L655-L813)
+
+**Best for**: Pipeline workflows with sequential dependencies
+
+### 4. Tree (Hierarchical)
+
+```python
+def tree_coordinate(self) -> None:
+    """Tree-based coordination mode."""
+    root_agent = self.graph.get_root_agent()
+    
+    results, communication, tasks = self._execute_agent_task_recursive(
+        root_agent, self.task
+    )
+```
+
+See [marble/engine/engine.py:815-949](/home/daytona/workspace/source/marble/engine/engine.py#L815-L949)
+
+**Best for**: Hierarchical task decomposition with manager-worker patterns
+
+## Component Interaction Flow
+
+### Initialization Flow
+
+1. **Configuration Loading**: Parse and validate configuration
+2. **Environment Setup**: Initialize the execution environment
+3. **Agent Creation**: Instantiate agents with profiles and capabilities
+4. **Graph Construction**: Build relationship network
+5. **Memory Initialization**: Set up memory systems
+6. **Planner Setup**: Configure task assignment strategy
+
+### Execution Flow
+
+1. **Task Assignment**: Planner distributes tasks to agents
+2. **Agent Perception**: Agents perceive environment state
+3. **Reasoning**: Agents process information and plan actions
+4. **Action Execution**: Agents perform actions in environment
+5. **Communication**: Agents exchange information
+6. **Evaluation**: Metrics are computed and logged
+7. **Iteration**: Process repeats until completion
+
+```python
+# Example execution flow
+def start(self) -> None:
+    """Start the engine to run the simulation."""
+    self.logger.info("Engine starting simulation.")
+    
+    if self.coordinate_mode == "star":
+        self.star_coordinate()
+    elif self.coordinate_mode == "graph":
+        self.graph_coordinate()
+    elif self.coordinate_mode == "chain":
+        self.chain_coordinate()
+    elif self.coordinate_mode == "tree":
+        self.tree_coordinate()
+```
+
+See [marble/engine/engine.py:1034-1057](/home/daytona/workspace/source/marble/engine/engine.py#L1034-L1057)
+
+## Design Principles
+
+<CardGroup cols={2}>
+  <Card title="Modularity" icon="puzzle-piece">
+    Each component has a clear interface and can be extended independently
+  </Card>
+  
+  <Card title="Flexibility" icon="sliders">
+    Multiple coordination modes support different problem types
+  </Card>
+  
+  <Card title="Extensibility" icon="arrow-up-right-dots">
+    New environments, agents, and memory systems can be added easily
+  </Card>
+  
+  <Card title="Observability" icon="eye">
+    Comprehensive logging and evaluation metrics throughout
+  </Card>
+</CardGroup>
+
+<Note>
+  The architecture is designed to be **environment-agnostic**. The same agent and coordination logic can work across different domains (coding, research, games, etc.) by simply changing the environment implementation.
+</Note>
+
+## Related Concepts
+
+<CardGroup cols={3}>
+  <Card title="Agents" icon="user-robot" href="/concepts/agents">
+    Learn about agent capabilities
+  </Card>
+  
+  <Card title="Engine" icon="gears" href="/concepts/engine">
+    Deep dive into coordination
+  </Card>
+  
+  <Card title="Environments" icon="globe" href="/concepts/environments">
+    Explore execution contexts
+  </Card>
+</CardGroup>

@@ -1,0 +1,551 @@
+---
+title: "DBEnvironment"
+description: "Environment for database performance diagnostics using PostgreSQL, Prometheus monitoring, and anomaly detection"
+---
+
+## Overview
+
+`DBEnvironment` extends `BaseEnvironment` to provide a comprehensive database diagnostics environment with PostgreSQL monitoring, Prometheus metrics collection, anomaly detection, and RAG-based knowledge retrieval.
+
+## Class Definition
+
+```python
+class DBEnvironment(BaseEnvironment):
+    def __init__(self, config: Dict[str, Any], name: str = "DBEnv")
+```
+
+## Constructor
+
+### `__init__(config, name)`
+
+Initialize a new database diagnostics environment.
+
+<ParamField path="config" type="Dict[str, Any]" required>
+  Configuration dictionary supporting:
+  - `init_sql`: Initial SQL statements to execute
+  - `test_sql`: Test SQL statements to run
+  - `anomalies`: List of anomaly configurations (see Anomaly Types below)
+  - Standard BaseEnvironment config options
+</ParamField>
+
+<ParamField path="name" type="str" default="DBEnv">
+  Name of the environment
+</ParamField>
+
+### Example
+
+```python
+from marble.environments.db_env import DBEnvironment
+
+config = {
+    "init_sql": "CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT);",
+    "anomalies": [
+        {
+            "anomaly": "MISSING_INDEXES",
+            "threads": 1000,
+            "ncolumn": 1000,
+            "colsize": 1000
+        }
+    ],
+    "max_iterations": 30
+}
+
+env = DBEnvironment(config=config, name="PerformanceTest")
+```
+
+## Infrastructure Components
+
+### Docker Services
+
+DBEnvironment automatically manages Docker containers:
+
+- **PostgreSQL**: Database server (port 5432)
+- **Prometheus**: Metrics collection (port 9090)
+- **Exporters**: Database metrics exporters
+
+### Database Connection
+
+Default connection parameters:
+- **Host**: localhost
+- **Port**: 5432
+- **Database**: sysbench
+- **User**: test
+- **Password**: Test123_456
+
+## Properties
+
+<ResponseField name="kb" type="DiagnosticKB">
+  Diagnostic knowledge base for RAG retrieval
+</ResponseField>
+
+<ResponseField name="current_dir" type="str">
+  Directory containing the environment module
+</ResponseField>
+
+Inherits all properties from [BaseEnvironment](/api/environments/base-env).
+
+## Registered Actions
+
+### `query_db`
+
+Execute SQL queries against the PostgreSQL database.
+
+<ParamField path="sql" type="str" required>
+  SQL statement(s) to execute. Multiple statements can be separated by semicolons.
+  
+  Recommended tables:
+  - `pg_stat_statements` - Query statistics
+  - `pg_stat_activity` - Active connections and queries
+  - `pg_locks` - Lock information
+  - `pg_stat_user_indexes` - Index usage statistics
+  - `pg_stat_all_tables` - Table statistics
+</ParamField>
+
+<ResponseField name="status" type="str">
+  "success" or "error"
+</ResponseField>
+
+<ResponseField name="function_name" type="str">
+  "query_db"
+</ResponseField>
+
+<ResponseField name="explanation" type="str">
+  Query results or error message. Includes:
+  - Success message with returned rows
+  - The executed query
+  - Result data
+</ResponseField>
+
+#### Example: Find Slow Queries
+
+```python
+result = env.apply_action(
+    agent_id="dba_agent",
+    action_name="query_db",
+    arguments={
+        "sql": """
+            SELECT query, total_exec_time, calls
+            FROM pg_stat_statements
+            ORDER BY total_exec_time DESC
+            LIMIT 10;
+        """
+    }
+)
+
+print(result["explanation"])
+```
+
+#### Example: Check Lock Contention
+
+```python
+result = env.apply_action(
+    agent_id="dba_agent",
+    action_name="query_db",
+    arguments={
+        "sql": """
+            SELECT l.pid, l.locktype, l.mode, a.query
+            FROM pg_locks l
+            JOIN pg_stat_activity a ON l.pid = a.pid
+            WHERE NOT l.granted
+            LIMIT 20;
+        """
+    }
+)
+```
+
+#### Example: Index Usage Analysis
+
+```python
+result = env.apply_action(
+    agent_id="dba_agent",
+    action_name="query_db",
+    arguments={
+        "sql": """
+            SELECT schemaname, tablename, indexname, idx_scan, idx_tup_read
+            FROM pg_stat_user_indexes
+            WHERE idx_scan = 0
+            ORDER BY idx_tup_read DESC
+            LIMIT 50;
+        """
+    }
+)
+```
+
+## Diagnostic Methods
+
+These methods are called during initialization for diagnostics:
+
+### `get_alerts_handler()`
+
+Retrieve current Prometheus alerts.
+
+```python
+def get_alerts_handler(self) -> Dict[str, Any]
+```
+
+<ResponseField name="status" type="str">
+  "success" or "error"
+</ResponseField>
+
+<ResponseField name="alert_count" type="int">
+  Number of active alerts
+</ResponseField>
+
+<ResponseField name="explanation" type="str">
+  Formatted alert information including:
+  - Alert name and description
+  - Severity level
+  - State (firing, pending)
+  - Active since timestamp
+  - Alert value
+</ResponseField>
+
+### `get_alert_metrics_handler()`
+
+Get detailed metrics for active alerts.
+
+```python
+def get_alert_metrics_handler(self) -> Dict[str, Any]
+```
+
+<ResponseField name="status" type="str">
+  "success" or "error"
+</ResponseField>
+
+<ResponseField name="function_name" type="str">
+  "get_alert_metrics"
+</ResponseField>
+
+<ResponseField name="explanation" type="str">
+  Metric data descriptions including statistical features
+</ResponseField>
+
+### `detect_metric_abnormality_handler(metric_name)`
+
+Detect abnormalities in specific metric categories.
+
+```python
+def detect_metric_abnormality_handler(self, metric_name: str) -> Dict[str, Any]
+```
+
+<ParamField path="metric_name" type="str" required>
+  Metric category to analyze:
+  - "cpu" - CPU usage metrics
+  - "memory" - Memory usage metrics
+  - "network" - Network I/O metrics
+  - "io" - Disk I/O metrics
+</ParamField>
+
+<ResponseField name="status" type="str">
+  "success" or "error"
+</ResponseField>
+
+<ResponseField name="function_name" type="str">
+  "detect_metric_abnormality"
+</ResponseField>
+
+<ResponseField name="explanation" type="str">
+  Anomaly detection results with statistical descriptions
+</ResponseField>
+
+### `get_rag_handler(expert, query_str)`
+
+Retrieve relevant knowledge from the diagnostic knowledge base.
+
+```python
+def get_rag_handler(self, expert: str, query_str: str) -> Dict[str, Any]
+```
+
+<ParamField path="expert" type="str" required>
+  Expert type to consult:
+  - "ConfigurationExpert"
+  - "CpuExpert"
+  - "DiskExpert"
+  - "IndexExpert"
+  - "IoExpert"
+  - "MemoryExpert"
+  - "QueryExpert"
+  - "RecoveryExpert"
+  - "WorkloadExpert"
+</ParamField>
+
+<ParamField path="query_str" type="str" required>
+  Query describing the issue to investigate
+</ParamField>
+
+<ResponseField name="status" type="str">
+  "success" or "error"
+</ResponseField>
+
+<ResponseField name="function_name" type="str">
+  "get_rag"
+</ResponseField>
+
+<ResponseField name="explanation" type="str">
+  Retrieved knowledge including:
+  - Cause name
+  - Related metrics
+  - Expert category
+</ResponseField>
+
+### `get_slow_query_handler()`
+
+Obtain information about the slowest database queries.
+
+```python
+def get_slow_query_handler(self) -> Dict[str, Any]
+```
+
+<ResponseField name="status" type="str">
+  "success" or "error"
+</ResponseField>
+
+<ResponseField name="function_name" type="str">
+  "get_slow_query"
+</ResponseField>
+
+<ResponseField name="explanation" type="str">
+  Formatted slow query information
+</ResponseField>
+
+## Anomaly Types
+
+The environment supports triggering various database anomalies:
+
+### Configuration Format
+
+```python
+anomalies = [
+    {
+        "anomaly": "ANOMALY_TYPE",
+        "threads": 1000,      # Number of concurrent threads
+        "ncolumn": 1000,      # Number of columns
+        "colsize": 1000       # Column size
+    }
+]
+```
+
+### Available Anomaly Types
+
+- `MISSING_INDEXES` - Creates queries that would benefit from indexes
+- `LOCK_CONTENTION` - Generates lock contention scenarios
+- `VACUUM_NEEDED` - Triggers scenarios requiring vacuum
+- `IO_BOTTLENECK` - Creates I/O intensive operations
+- `INSERT_LARGE_DATA` - Bulk insert operations
+
+## Prometheus Metrics
+
+The environment provides functions to query Prometheus metrics:
+
+### `get_prometheus_metric_data(metric_name, start_time, end_time, step)`
+
+```python
+def get_prometheus_metric_data(
+    metric_name: str,
+    start_time: float,
+    end_time: float,
+    step: int = 1
+) -> List[List[Any]]
+```
+
+<ParamField path="metric_name" type="str" required>
+  Prometheus metric name (e.g., "pg_stat_activity_count")
+</ParamField>
+
+<ParamField path="start_time" type="float" required>
+  Unix timestamp for range start
+</ParamField>
+
+<ParamField path="end_time" type="float" required>
+  Unix timestamp for range end
+</ParamField>
+
+<ParamField path="step" type="int" default={1}>
+  Query resolution step in seconds
+</ParamField>
+
+<ResponseField name="return" type="List[List[Any]]">
+  List of [timestamp, value] pairs
+</ResponseField>
+
+### `get_metric_data_for_last_10_minutes(metric_name)`
+
+Convenience function to get recent metric data.
+
+```python
+def get_metric_data_for_last_10_minutes(metric_name: str) -> List[List[Any]]
+```
+
+## Initialization Workflow
+
+1. **Start Docker Containers**: Brings up PostgreSQL, Prometheus, and exporters
+2. **Wait for Database**: Polls until database is ready
+3. **Execute Init SQL**: Runs initialization statements
+4. **Create Extensions**: Installs `pg_stat_statements`
+5. **Trigger Anomalies**: Executes anomaly trigger scripts if configured
+6. **Register Actions**: Makes diagnostic actions available
+7. **Wait for Alerts**: Optionally waits for Prometheus alerts
+8. **Run Diagnostics**: Executes initial diagnostic checks
+
+## Complete Diagnostic Example
+
+```python
+from marble.environments.db_env import DBEnvironment
+
+# Configuration with missing index anomaly
+config = {
+    "init_sql": """
+        CREATE TABLE products (
+            id SERIAL PRIMARY KEY,
+            name TEXT,
+            category TEXT,
+            price DECIMAL
+        );
+        
+        INSERT INTO products (name, category, price)
+        SELECT 
+            'Product ' || i,
+            'Category ' || (i % 10),
+            (random() * 1000)::DECIMAL
+        FROM generate_series(1, 100000) i;
+    """,
+    "anomalies": [
+        {
+            "anomaly": "MISSING_INDEXES",
+            "threads": 500,
+            "ncolumn": 1000,
+            "colsize": 1000
+        }
+    ]
+}
+
+env = DBEnvironment(config=config)
+
+# Query 1: Find tables without indexes
+result = env.apply_action(
+    agent_id="dba",
+    action_name="query_db",
+    arguments={
+        "sql": """
+            SELECT schemaname, tablename
+            FROM pg_tables
+            WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+            AND tablename NOT IN (
+                SELECT tablename
+                FROM pg_indexes
+                WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+            )
+            LIMIT 20;
+        """
+    }
+)
+
+print("Tables without indexes:")
+print(result["explanation"])
+
+# Query 2: Find queries doing sequential scans
+result = env.apply_action(
+    agent_id="dba",
+    action_name="query_db",
+    arguments={
+        "sql": """
+            SELECT query, calls, total_exec_time, 
+                   mean_exec_time, rows
+            FROM pg_stat_statements
+            WHERE query LIKE '%SELECT%'
+            ORDER BY total_exec_time DESC
+            LIMIT 10;
+        """
+    }
+)
+
+print("\nSlowest queries:")
+print(result["explanation"])
+
+# Query 3: Check table statistics
+result = env.apply_action(
+    agent_id="dba",
+    action_name="query_db",
+    arguments={
+        "sql": """
+            SELECT schemaname, relname, seq_scan, seq_tup_read,
+                   idx_scan, idx_tup_fetch,
+                   n_tup_ins, n_tup_upd, n_tup_del
+            FROM pg_stat_all_tables
+            WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+            ORDER BY seq_scan DESC
+            LIMIT 10;
+        """
+    }
+)
+
+print("\nTable scan statistics:")
+print(result["explanation"])
+
+# Clean up
+env.terminate()
+```
+
+## Utility Methods
+
+### `start_docker_containers()`
+
+Starts the Docker environment.
+
+```python
+def start_docker_containers(self)
+```
+
+### `initialize_database(config)`
+
+Initializes the database with provided configuration.
+
+```python
+def initialize_database(self, config: Dict[str, Any])
+```
+
+### `check_db_connection()`
+
+Tests database connectivity.
+
+```python
+def check_db_connection(self) -> bool
+```
+
+### `terminate()`
+
+Stops Docker containers and cleans up resources.
+
+```python
+def terminate(self) -> None
+```
+
+## Error Handling
+
+```python
+result = env.apply_action(
+    agent_id="dba",
+    action_name="query_db",
+    arguments={"sql": "INVALID SQL;"}
+)
+
+if result["status"] == "error":
+    print(f"Query failed: {result['explanation']}")
+    # Handle syntax errors, permission issues, etc.
+```
+
+## Performance Monitoring
+
+Key metrics to monitor:
+
+- **Query Performance**: `pg_stat_statements.total_exec_time`
+- **Lock Contention**: `pg_locks` and `pg_stat_activity`
+- **Index Usage**: `pg_stat_user_indexes.idx_scan`
+- **Table Bloat**: `pg_stat_all_tables.n_dead_tup`
+- **Connection Count**: `pg_stat_activity`
+
+## See Also
+
+- [BaseEnvironment](/api/environments/base-env) - Parent class documentation
+- [CodingEnvironment](/api/environments/coding-env) - Code development environment
+- [ResearchEnvironment](/api/environments/research-env) - Research environment

@@ -1,0 +1,205 @@
+---
+title: 'Environments Overview'
+description: 'Overview of all available environments in MARBLE'
+---
+
+## Introduction
+
+MARBLE provides a diverse set of environments that enable multi-agent systems to collaborate on complex tasks. Each environment is designed for specific domains and comes with specialized tools and APIs.
+
+## Available Environments
+
+<CardGroup cols={2}>
+  <Card title="Werewolf Game" icon="wolf" href="/environments/werewolf">
+    Social deduction game environment with day/night cycles, roles, and strategic gameplay
+  </Card>
+  
+  <Card title="Research Collaboration" icon="flask" href="/environments/research">
+    Academic research environment with paper discovery and idea generation capabilities
+  </Card>
+  
+  <Card title="Coding" icon="code" href="/environments/coding">
+    Software development environment with code generation and review tools
+  </Card>
+  
+  <Card title="Database Diagnosis" icon="database" href="/environments/database">
+    Database performance monitoring and diagnosis environment
+  </Card>
+  
+  <Card title="Minecraft" icon="cubes" href="/environments/minecraft">
+    3D world navigation and building environment
+  </Card>
+  
+  <Card title="Web" icon="globe" href="/environments/web">
+    Web browsing and content extraction environment
+  </Card>
+</CardGroup>
+
+## Environment Architecture
+
+All environments inherit from the `BaseEnvironment` class, which provides:
+
+- **Action Registration**: Register custom actions that agents can perform
+- **State Management**: Track environment state across agent interactions
+- **Iteration Control**: Manage task completion and limits
+- **Configuration**: Flexible configuration through YAML files
+
+### Base Environment Structure
+
+```python
+from marble.environments.base_env import BaseEnvironment
+
+class CustomEnvironment(BaseEnvironment):
+    def __init__(self, config: Dict[str, Any], name: str = "CustomEnv"):
+        super().__init__(name, config)
+        
+        # Register custom actions
+        self.register_action(
+            action_name="custom_action",
+            handler=self._custom_action_handler,
+            description={
+                "type": "function",
+                "function": {
+                    "name": "custom_action",
+                    "description": "Description of the action",
+                    "parameters": {...}
+                }
+            }
+        )
+```
+
+## Configuration Format
+
+All environments use YAML configuration files with the following structure:
+
+```yaml
+coordinate_mode: chain  # or graph
+
+environment:
+  type: Research  # Environment type
+  name: "Research Collaboration Environment"
+  max_iterations: 5
+  # Environment-specific settings
+
+task:
+  content: "Your task description here"
+
+agents:
+  - type: BaseAgent
+    agent_id: agent1
+    profile: "Agent profile and capabilities"
+
+memory:
+  type: SharedMemory
+
+metrics:
+  evaluate_llm: gpt-4o
+```
+
+## Common Features
+
+### Action System
+
+All environments support action registration using OpenAI function calling format:
+
+```python
+action_description = {
+    "type": "function",
+    "function": {
+        "name": "action_name",
+        "description": "What this action does",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "param1": {
+                    "type": "string",
+                    "description": "Parameter description"
+                }
+            },
+            "required": ["param1"],
+            "additionalProperties": False
+        }
+    }
+}
+```
+
+### State Management
+
+Environments maintain state that can be accessed by agents:
+
+```python
+# Get current environment state
+state = env.get_state()
+
+# Apply an action
+result = env.apply_action(
+    agent_id="agent1",
+    action_name="custom_action",
+    arguments={"param1": "value"}
+)
+```
+
+## Choosing an Environment
+
+<AccordionGroup>
+  <Accordion title="For Social Interaction Research">
+    Use the **Werewolf** environment to study:
+    - Strategic communication
+    - Deception and trust
+    - Coalition formation
+    - Information asymmetry
+  </Accordion>
+
+  <Accordion title="For Academic Research">
+    Use the **Research** environment to study:
+    - Collaborative idea generation
+    - Literature review and synthesis
+    - Multi-perspective analysis
+    - Knowledge integration
+  </Accordion>
+
+  <Accordion title="For Software Development">
+    Use the **Coding** environment to study:
+    - Code generation and review
+    - Collaborative programming
+    - Software quality assurance
+    - Multi-agent debugging
+  </Accordion>
+
+  <Accordion title="For System Diagnosis">
+    Use the **Database** environment to study:
+    - Root cause analysis
+    - Performance optimization
+    - Expert knowledge integration
+    - Diagnostic reasoning
+  </Accordion>
+
+  <Accordion title="For Physical Interaction">
+    Use the **Minecraft** environment to study:
+    - 3D spatial reasoning
+    - Collaborative building
+    - Resource management
+    - Task planning and execution
+  </Accordion>
+
+  <Accordion title="For Information Gathering">
+    Use the **Web** environment to study:
+    - Information retrieval
+    - Content summarization
+    - Web navigation strategies
+    - Data extraction
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+Explore the detailed documentation for each environment:
+
+<CardGroup cols={3}>
+  <Card title="Werewolf" href="/environments/werewolf" />
+  <Card title="Research" href="/environments/research" />
+  <Card title="Coding" href="/environments/coding" />
+  <Card title="Database" href="/environments/database" />
+  <Card title="Minecraft" href="/environments/minecraft" />
+  <Card title="Web" href="/environments/web" />
+</CardGroup>

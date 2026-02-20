@@ -1,0 +1,608 @@
+---
+title: "WerewolfEnvironment"
+description: "Multi-agent social deduction game environment for Werewolf with role-based gameplay, event system, and cooperative strategies"
+---
+
+## Overview
+
+`WerewolfEnv` is a complex multi-agent environment for simulating the social deduction game Werewolf (Mafia). It manages game state, coordinates agent actions through day-night cycles, and supports advanced features like checkpointing and strategy evaluation.
+
+<Note>
+WerewolfEnv does NOT inherit from BaseEnvironment. It has its own distinct architecture with event-based communication.
+</Note>
+
+## Class Definition
+
+```python
+class WerewolfEnv:
+    def __init__(self, name: str, config_path: str, log_dir: str = "werewolf_log")
+```
+
+## Constructor
+
+### `__init__(name, config_path, log_dir)`
+
+Initialize a new Werewolf game environment.
+
+<ParamField path="name" type="str" required>
+  Name of the environment/game instance
+</ParamField>
+
+<ParamField path="config_path" type="str" required>
+  Path to the YAML configuration file containing:
+  - `roles`: List of roles for players
+  - `system_prompt_path`: Path to game introduction YAML
+  - `randomize_roles`: Whether to shuffle roles
+  - `use_random_names`: Whether to generate random names
+  - `villager_config`: Configuration for villager agents
+  - `werewolf_config`: Configuration for werewolf agents
+  - `use_daily_tasks`: Enable daily task evaluation
+</ParamField>
+
+<ParamField path="log_dir" type="str" default="werewolf_log">
+  Directory for storing game logs and checkpoints
+</ParamField>
+
+### Example Configuration
+
+```yaml
+# werewolf_config.yaml
+roles:
+  - wolf
+  - wolf
+  - wolf
+  - villager
+  - villager
+  - villager
+  - seer
+  - witch
+  - guard
+
+randomize_roles: true
+use_random_names: true
+use_daily_tasks: false
+
+system_prompt_path: "prompts/werewolf_system.yaml"
+
+villager_config:
+  model_name: "gpt-4"
+  temperature: 0.7
+
+werewolf_config:
+  model_name: "gpt-4"
+  temperature: 0.8
+  cooperation_mode: "collaborative"
+```
+
+### Example Initialization
+
+```python
+from marble.environments.werewolf_env import WerewolfEnv
+
+env = WerewolfEnv(
+    name="game_001",
+    config_path="configs/werewolf_config.yaml",
+    log_dir="game_logs"
+)
+```
+
+## Game Roles
+
+### Werewolf Team
+
+<ParamField path="wolf" type="role">
+  **Werewolves**: Select a villager to eliminate each night. Win when they equal or outnumber villagers.
+  
+  **Night Action**: Vote on target to eliminate
+  
+  **Cooperation**: Can coordinate in multi-round voting system
+</ParamField>
+
+### Villager Team
+
+<ParamField path="villager" type="role">
+  **Villagers**: No special abilities. Participate in discussions and voting.
+  
+  **Day Action**: Speech and voting
+  
+  **Goal**: Identify and eliminate werewolves
+</ParamField>
+
+<ParamField path="seer" type="role">
+  **Seer**: Can check one player's identity each night.
+  
+  **Night Action**: Select a player to investigate
+  
+  **Result**: Learns if target is werewolf or not
+</ParamField>
+
+<ParamField path="witch" type="role">
+  **Witch**: Has one antidote and one poison.
+  
+  **Night Action**:
+  - Use antidote to save werewolf target (once per game)
+  - Use poison to eliminate a player (once per game)
+  
+  **Restriction**: Can only use one potion per night
+</ParamField>
+
+<ParamField path="guard" type="role">
+  **Guard**: Can protect one player each night.
+  
+  **Night Action**: Select a player to protect
+  
+  **Restriction**: Cannot protect the same player two nights in a row
+</ParamField>
+
+## Properties
+
+<ResponseField name="name" type="str">
+  Environment name
+</ResponseField>
+
+<ResponseField name="agents" type="List[WerewolfAgent]">
+  List of all player agents in the game
+</ResponseField>
+
+<ResponseField name="shared_memory" type="Dict[str, Any]">
+  Game state storage with:
+  - `public_state`: Information visible to all players
+  - `private_state`: Hidden information (roles, night actions)
+  - `public_event_log`: Public game history
+  - `private_event_log`: Complete game history
+</ResponseField>
+
+<ResponseField name="event_bus" type="EventBus">
+  Event system for agent communication
+</ResponseField>
+
+<ResponseField name="scores" type="Dict[str, Dict]">
+  Score tracking for villager and werewolf teams:
+  - `total`: Current total score
+  - `details`: List of scoring events
+</ResponseField>
+
+<ResponseField name="daily_tasks" type="Dict[str, List[str]]">
+  Daily task lists for evaluation:
+  - `private`: Tasks tracked internally
+  - `public`: Tasks visible to agents
+</ResponseField>
+
+<ResponseField name="config" type="Dict[str, Any]">
+  Game configuration loaded from YAML
+</ResponseField>
+
+## Shared Memory Structure
+
+### Public State
+
+```python
+shared_memory["public_state"] = {
+    "days": 0,                          # Current day number
+    "day/night": "night",               # Current phase
+    "alive_players": [...],             # List of living player IDs
+    "sheriff": None,                    # Sheriff player ID (if elected)
+    "event_log": "...",                 # Public event history
+    "speech_order": {},                 # Speaking order by day
+    "day_cache": []                     # Daily action cache
+}
+```
+
+### Private State
+
+```python
+shared_memory["private_state"] = {
+    "players": {
+        "player_id": {
+            "role": "wolf",
+            "status": {
+                "health": 1,
+                "protection_count": 0,
+                "poison_count": 1,
+                "antidote_count": 1,
+                "check_history": {}      # For seer only
+            },
+            "personal_event_log": "..."  # Player's view of events
+        }
+    },
+    "guard_last_night_protect": None,
+    "werewolf_action": {
+        "rounds_remaining": 5,
+        "alive_werewolves": [...],
+        "round_targets": [],
+        "final_target": None
+    },
+    "night_cache": []                    # Nightly action cache
+}
+```
+
+## Methods
+
+### `start()`
+
+Start the game and run the day-night cycle until completion.
+
+```python
+def start(self) -> dict
+```
+
+<ResponseField name="return" type="dict">
+  Game result containing:
+  - `terminated`: Whether game ended
+  - `result`: "Villagers win" or "Werewolves win"
+  - `details`: Game statistics
+  - `scores`: Final scores
+</ResponseField>
+
+#### Example
+
+```python
+env = WerewolfEnv("game", "config.yaml")
+result = env.start()
+
+print(f"Game ended: {result['result']}")
+print(f"Villager score: {result['scores']['process_scores']['villager']['total']}")
+print(f"Werewolf score: {result['scores']['process_scores']['werewolf']['total']}")
+```
+
+### `night()`
+
+Execute the night phase with role actions.
+
+```python
+def night(self) -> None
+```
+
+**Night Sequence:**
+1. Guard protects a player
+2. Werewolves select target
+3. Seer investigates a player
+4. Witch decides on potions
+
+### `day()`
+
+Execute the day phase with speeches and voting.
+
+```python
+def day(self) -> None
+```
+
+**Day Sequence (Day 1):**
+1. Sheriff election
+2. Announce deceased
+3. Last words (if applicable)
+4. Sheriff decides speech order
+5. Player speeches
+6. Voting and exile
+
+**Day Sequence (Day 2+):**
+1. Announce deceased
+2. Sheriff decides speech order
+3. Player speeches
+4. Voting and exile
+
+### `should_terminate()`
+
+Check if game should end.
+
+```python
+def should_terminate(self) -> dict
+```
+
+<ResponseField name="return" type="dict">
+  Termination status:
+  - `terminated`: True if game should end
+  - `result`: Winner ("Villagers win" or "Werewolves win")
+  - `details`: Game summary with alive players and counts
+  - `scores`: Final scoring information
+</ResponseField>
+
+**Termination Conditions:**
+- All werewolves eliminated → Villagers win
+- Werewolves ≥ villagers → Werewolves win
+
+### `log_event(is_private, agent_id, content, ...)`
+
+Log game events to appropriate logs.
+
+```python
+def log_event(
+    self,
+    is_private: bool,
+    agent_id: str,
+    content: str,
+    log_to_system: bool = True,
+    print_to_system: bool = True
+) -> None
+```
+
+<ParamField path="is_private" type="bool" required>
+  If True, log only to private logs. If False, log to all player logs.
+</ParamField>
+
+<ParamField path="agent_id" type="str" required>
+  ID of the agent or "system" for system messages
+</ParamField>
+
+<ParamField path="content" type="str" required>
+  Content to log
+</ParamField>
+
+<ParamField path="log_to_system" type="bool" default={true}>
+  Whether to write to shared_memory logs
+</ParamField>
+
+<ParamField path="print_to_system" type="bool" default={true}>
+  Whether to print to console
+</ParamField>
+
+### `save_checkpoint(snapshot, filename)`
+
+Save game state to checkpoint file.
+
+```python
+def save_checkpoint(self, snapshot: Dict[str, Any], filename: str) -> None
+```
+
+<ParamField path="snapshot" type="Dict[str, Any]" required>
+  Game state dictionary from `to_dict()`
+</ParamField>
+
+<ParamField path="filename" type="str" required>
+  Checkpoint filename (e.g., "checkpoint_Day1.json")
+</ParamField>
+
+### `to_dict(day_night_info)`
+
+Serialize environment state.
+
+```python
+def to_dict(self, day_night_info: str = "") -> Dict[str, Any]
+```
+
+<ParamField path="day_night_info" type="str">
+  Label like "Day1" or "Night2" to append to environment name
+</ParamField>
+
+<ResponseField name="return" type="Dict[str, Any]">
+  Serialized environment state including:
+  - `config`: Game configuration
+  - `shared_memory`: Current game state
+  - `scores`: Current scores
+  - `agents`: Serialized agent states
+  - `env_name`: Environment name with day/night label
+</ResponseField>
+
+### `load_from_file(file_path, log_dir, override_config_path)`
+
+Load game from checkpoint file.
+
+```python
+@classmethod
+def load_from_file(
+    cls,
+    file_path: str,
+    log_dir: str = "werewolf_log",
+    override_config_path: Optional[str] = None
+) -> "WerewolfEnv"
+```
+
+<ParamField path="file_path" type="str" required>
+  Path to checkpoint JSON file
+</ParamField>
+
+<ParamField path="log_dir" type="str" default="werewolf_log">
+  Directory for new logs
+</ParamField>
+
+<ParamField path="override_config_path" type="Optional[str]">
+  Path to YAML file with new agent configurations
+</ParamField>
+
+<ResponseField name="return" type="WerewolfEnv">
+  Restored environment instance
+</ResponseField>
+
+#### Example
+
+```python
+# Load from checkpoint
+env = WerewolfEnv.load_from_file(
+    "game_logs/game_001/checkpoint_Night2.json",
+    override_config_path="configs/new_config.yaml"
+)
+
+# Continue game
+result = env.continue_game(simulate_one_cycle=True)
+```
+
+### `continue_game(simulate_one_cycle)`
+
+Continue game from loaded checkpoint.
+
+```python
+def continue_game(self, simulate_one_cycle: bool = False) -> dict
+```
+
+<ParamField path="simulate_one_cycle" type="bool" default={false}>
+  If True, run only one day-night cycle then stop
+</ParamField>
+
+<ResponseField name="return" type="dict">
+  Combined result containing:
+  - `game_result`: Final game outcome
+  - `stage_result`: Daily task evaluation (if enabled)
+</ResponseField>
+
+### `evaluate_daily_stage_tasks(day_label, tasks)`
+
+Evaluate task completion for a day.
+
+```python
+def evaluate_daily_stage_tasks(
+    self,
+    day_label: str,
+    tasks: List[str]
+) -> Dict[str, Any]
+```
+
+<ParamField path="day_label" type="str" required>
+  Day identifier (e.g., "Day3")
+</ParamField>
+
+<ParamField path="tasks" type="List[str]" required>
+  List of task IDs:
+  - "protect_seer"
+  - "rescue_villager"
+  - "run_for_sheriff"
+  - "exile_werewolf"
+  - "poison_werewolf"
+</ParamField>
+
+<ResponseField name="return" type="Dict[str, Any]">
+  Task completion results and scoring details
+</ResponseField>
+
+## Event System
+
+The environment uses an EventBus for agent communication:
+
+### Publishing Events
+
+```python
+def publish_event(self, event: dict):
+    self.current_event = event["event_type"]
+    self.event_completed = False
+    self.event_bus.publish(event)
+    
+    # Wait for completion
+    while not self.event_completed:
+        time.sleep(0.01)
+```
+
+### Event Types
+
+- `night_action` - Werewolf target selection
+- `guard_action` - Guard protection
+- `seer_action` - Seer investigation
+- `witch_action` - Witch potion use
+- `sheriff_election` - Sheriff voting
+- `day_speech` - Player speeches
+- `day_vote` - Exile voting
+
+## Scoring System
+
+The environment tracks scores for both teams:
+
+### Villager Scoring
+
+- Seer survives a day: +1 point
+- Exile a werewolf: +3 points
+- Witch successfully uses poison on werewolf: +2 points
+- Guard successfully protects: +1 point
+
+### Werewolf Scoring
+
+- Successfully eliminate a villager: +1 point
+- Eliminate seer: +2 points
+- Avoid exile when speaking: +0.5 points
+
+### Result Score
+
+Final score = (Surviving villagers) - (Surviving werewolves)
+
+## Complete Game Example
+
+```python
+from marble.environments.werewolf_env import WerewolfEnv
+
+# Create environment
+env = WerewolfEnv(
+    name="game_001",
+    config_path="configs/werewolf_config.yaml",
+    log_dir="game_logs"
+)
+
+# Start game
+result = env.start()
+
+# Check results
+if result["terminated"]:
+    print(f"\n{'='*50}")
+    print(f"GAME OVER: {result['result']}")
+    print(f"{'='*50}\n")
+    
+    # Show final scores
+    scores = result["scores"]["process_scores"]
+    print(f"Villager Team Score: {scores['villager']['total']}")
+    print(f"Werewolf Team Score: {scores['werewolf']['total']}")
+    print(f"Result Score: {result['scores']['result_score']}\n")
+    
+    # Show survivors
+    details = result["details"]
+    print(f"Survivors: {details['alive_players']}")
+    print(f"Werewolves remaining: {details['werewolf_count']}")
+    print(f"Villagers remaining: {details['non_werewolf_count']}")
+```
+
+## Checkpoint and Resume Example
+
+```python
+# Start a game and save checkpoints
+env = WerewolfEnv("game", "config.yaml")
+env.start()  # Checkpoints saved automatically
+
+# Later, load from a checkpoint
+env2 = WerewolfEnv.load_from_file(
+    "werewolf_log/game_20240220_103000/checkpoint_Night3.json",
+    override_config_path="configs/modified_config.yaml"
+)
+
+# Continue from where it left off
+result = env2.continue_game(simulate_one_cycle=False)
+```
+
+## Log Directory Structure
+
+```
+werewolf_log/
+└── game_20240220_103000_Villagers_win/
+    ├── shared_memory.json              # Final game state
+    ├── result.json                     # Game result summary
+    ├── checkpoint_Night1.json          # Night 1 checkpoint
+    ├── checkpoint_Day1.json            # Day 1 checkpoint
+    ├── checkpoint_Night2.json          # Night 2 checkpoint
+    ├── agent_1.log                     # Player 1 log
+    ├── agent_2.log                     # Player 2 log
+    └── ...
+```
+
+## Advanced Features
+
+### Daily Tasks
+
+Enable task evaluation in config:
+
+```yaml
+use_daily_tasks: true
+```
+
+Tasks automatically generated and evaluated each day:
+- Protect critical roles
+- Eliminate werewolves
+- Sheriff election participation
+
+### Cooperation Modes
+
+Werewolves support different cooperation strategies:
+
+```yaml
+werewolf_config:
+  cooperation_mode: "collaborative"  # or "independent"
+```
+
+## See Also
+
+- [WerewolfAgent](/api/agents/werewolf-agent) - Agent implementation for Werewolf
+- [BaseEnvironment](/api/environments/base-env) - Standard environment base class
+- [EventBus](/api/utils/eventbus) - Event system documentation

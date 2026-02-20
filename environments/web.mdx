@@ -1,0 +1,365 @@
+---
+title: Web Environment
+description: Documentation for the Web environment in MARBLE, enabling agents to fetch and process web content
+---
+
+The `WebEnvironment` provides agents with the ability to fetch and process web content, supporting information retrieval, research tasks, and web-based data gathering with built-in rate limiting and caching.
+
+## Overview
+
+The Web environment allows agents to interact with web pages by fetching content from URLs, extracting meaningful text, and caching results for efficient access. It includes automatic rate limiting to prevent excessive requests.
+
+## Installation
+
+Ensure you have the required dependencies:
+
+```bash
+pip install requests beautifulsoup4 litellm
+```
+
+## Configuration
+
+### Basic Configuration
+
+<CodeGroup>
+
+```python Python
+from marble.environments.web_env import WebEnvironment
+
+config = {}
+env = WebEnvironment(name="WebEnv", config=config)
+```
+
+```yaml YAML
+name: WebEnv
+config: {}
+```
+
+</CodeGroup>
+
+<Note>
+  The Web environment does not require specific configuration parameters. It uses sensible defaults for rate limiting and caching.
+</Note>
+
+## Available Actions
+
+### fetch_webpage
+
+Fetches the content of a webpage from a given URL with automatic text extraction and content trimming.
+
+<ParamField path="url" type="string" required>
+  The URL of the webpage to fetch. Must be a valid HTTP/HTTPS URL.
+</ParamField>
+
+#### Features
+
+- **Rate Limiting**: Automatically enforces a 1-second delay between requests
+- **Caching**: Stores fetched content to avoid redundant requests
+- **Text Extraction**: Removes HTML tags, scripts, and styles to extract clean text
+- **Content Trimming**: Limits content to 2048 tokens for efficient processing
+- **Browser-like Headers**: Uses realistic User-Agent headers to avoid blocking
+
+#### Return Value
+
+The action returns a dictionary with the following structure:
+
+```python
+{
+    "success": bool,          # Whether the request succeeded
+    "error-msg": str,         # Error message if failed, empty otherwise
+    "url": str,               # The URL that was fetched
+    "content": str            # Extracted and trimmed text content
+}
+```
+
+#### Example Usage
+
+```python
+result = env.apply_action(
+    agent_id=None,
+    action_name="fetch_webpage",
+    arguments={"url": "https://example.com/article"}
+)
+
+if result["success"]:
+    print(f"Content from {result['url']}:")
+    print(result["content"])
+else:
+    print(f"Error: {result['error-msg']}")
+```
+
+## Implementation Details
+
+### Text Extraction
+
+The environment uses BeautifulSoup to extract meaningful text from HTML:
+
+1. Parses HTML content
+2. Removes `<script>` and `<style>` elements
+3. Extracts text with proper spacing
+4. Cleans up excessive whitespace
+5. Returns a clean, readable text representation
+
+```python
+# Internal extraction process
+def extract_text_from_html(self, html_content: str) -> str:
+    soup = BeautifulSoup(html_content, "html.parser")
+    
+    # Remove script and style elements
+    for script in soup(["script", "style"]):
+        script.decompose()
+    
+    # Get text content with proper spacing
+    text = soup.get_text(separator=" ", strip=True)
+    
+    # Clean up whitespace
+    lines = (line.strip() for line in text.splitlines())
+    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+    text_ret = " ".join(chunk for chunk in chunks if chunk)
+    
+    return text_ret
+```
+
+### Rate Limiting
+
+The environment enforces a minimum 1-second delay between requests:
+
+```python
+# Waits until at least 1 second has passed since the last request
+while time.time() - self.last_visited_timestamp < 1:
+    time.sleep(0.5)
+```
+
+### Content Trimming
+
+Content is automatically trimmed to 2048 tokens using LiteLLM's `trim_messages` function:
+
+```python
+trimmed_content = trim_messages(
+    [{"role": "assistant", "content": extracted_text}],
+    "gpt-3.5-turbo",
+    max_tokens=2048
+)[0]["content"]
+```
+
+## Getting Environment State
+
+Retrieve the current state of the web environment:
+
+```python
+state = env.get_state()
+# Returns:
+# {
+#     "url": "https://last-visited-url.com",
+#     "content": "Full cached content of the last visited URL"
+# }
+```
+
+<Note>
+  The state includes the full cached content (not trimmed), while the action result returns trimmed content.
+</Note>
+
+## Error Handling
+
+The environment handles various error conditions:
+
+### Missing URL
+
+```python
+result = env.apply_action(
+    agent_id=None,
+    action_name="fetch_webpage",
+    arguments={"url": ""}
+)
+# Returns:
+# {
+#     "success": False,
+#     "error-msg": "URL is required to fetch a webpage."
+# }
+```
+
+### Request Failures
+
+Network errors, timeouts (5 seconds), and HTTP errors are caught:
+
+```python
+result = env.apply_action(
+    agent_id=None,
+    action_name="fetch_webpage",
+    arguments={"url": "https://invalid-domain-that-does-not-exist.com"}
+)
+# Returns:
+# {
+#     "success": False,
+#     "error-msg": "<exception details>"
+# }
+```
+
+## Complete Examples
+
+<CodeGroup>
+
+```python Basic Usage
+from marble.environments.web_env import WebEnvironment
+
+# Initialize environment
+env = WebEnvironment(name="WebEnv", config={})
+
+# Fetch a webpage
+result = env.apply_action(
+    agent_id=None,
+    action_name="fetch_webpage",
+    arguments={"url": "https://en.wikipedia.org/wiki/Artificial_intelligence"}
+)
+
+if result["success"]:
+    print("Content fetched successfully:")
+    print(result["content"][:200])  # Print first 200 characters
+else:
+    print(f"Failed to fetch: {result['error-msg']}")
+```
+
+```python Multiple URLs with Caching
+from marble.environments.web_env import WebEnvironment
+
+env = WebEnvironment(name="WebEnv", config={})
+
+urls = [
+    "https://example.com/page1",
+    "https://example.com/page2",
+    "https://example.com/page1"  # Will use cached version
+]
+
+for url in urls:
+    result = env.apply_action(
+        agent_id=None,
+        action_name="fetch_webpage",
+        arguments={"url": url}
+    )
+    
+    if result["success"]:
+        print(f"Fetched {url}: {len(result['content'])} characters")
+    else:
+        print(f"Error fetching {url}: {result['error-msg']}")
+```
+
+```python Research Agent Integration
+from marble.environments.web_env import WebEnvironment
+from marble.agents.base_agent import BaseAgent
+
+class ResearchAgent(BaseAgent):
+    def __init__(self, env: WebEnvironment):
+        self.env = env
+    
+    def research_topic(self, topic: str):
+        # Construct search URL (simplified example)
+        search_url = f"https://en.wikipedia.org/wiki/{topic.replace(' ', '_')}"
+        
+        # Fetch content
+        result = self.env.apply_action(
+            agent_id=None,
+            action_name="fetch_webpage",
+            arguments={"url": search_url}
+        )
+        
+        if result["success"]:
+            return {
+                "topic": topic,
+                "source": result["url"],
+                "summary": result["content"][:500]  # First 500 chars
+            }
+        else:
+            return {"error": result["error-msg"]}
+
+# Usage
+env = WebEnvironment(name="WebEnv", config={})
+agent = ResearchAgent(env)
+
+research_result = agent.research_topic("Machine Learning")
+print(research_result)
+```
+
+</CodeGroup>
+
+## Cache Management
+
+The web cache is stored in memory and persists for the lifetime of the environment instance:
+
+```python
+# Check if URL is cached
+if "https://example.com" in env.web_cache:
+    content = env.web_cache["https://example.com"]
+    print("Using cached content")
+```
+
+<Note>
+  The cache is automatically populated when fetching pages. There is currently no manual cache invalidation, but you can create a new environment instance to clear the cache.
+</Note>
+
+## Request Configuration
+
+The environment uses the following default configuration:
+
+- **User-Agent**: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/114.0.0.0
+- **Timeout**: 5 seconds
+- **Rate Limit**: 1 second between requests
+- **Max Content Tokens**: 2048 tokens
+
+These values are currently hardcoded but could be made configurable in future versions.
+
+## Best Practices
+
+<AccordionGroup>
+
+<Accordion title="Handling Rate Limits">
+  - The environment automatically enforces 1-second delays
+  - For bulk operations, consider batching requests
+  - Use the cache by avoiding redundant URL fetches
+  - Be respectful of server resources and terms of service
+</Accordion>
+
+<Accordion title="Content Processing">
+  - Content is automatically trimmed to 2048 tokens
+  - For longer content, consider fetching multiple related pages
+  - The extracted text removes all HTML formatting
+  - Check the `success` field before processing content
+</Accordion>
+
+<Accordion title="Error Recovery">
+  - Always check `result["success"]` before accessing content
+  - Handle network timeouts gracefully (5-second limit)
+  - Log error messages for debugging
+  - Consider retry logic for transient failures
+</Accordion>
+
+</AccordionGroup>
+
+## Limitations
+
+<Warning>
+  - **JavaScript Content**: The environment fetches raw HTML and cannot execute JavaScript. Dynamic content may not be available.
+  - **Authentication**: Currently no support for authenticated requests or cookies.
+  - **Binary Content**: Only designed for text-based web pages, not PDFs or images.
+  - **Content Length**: Trimmed to 2048 tokens, which may lose information from longer pages.
+</Warning>
+
+## Use Cases
+
+The Web environment is ideal for:
+
+- Information retrieval and fact-checking
+- Research tasks requiring multiple sources
+- Web scraping for structured data
+- Content summarization and analysis
+- Building knowledge bases from web sources
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Base Environment" icon="cube" href="/environments/base">
+    Learn about the base environment interface
+  </Card>
+  <Card title="Agents" icon="robot" href="/concepts/agents">
+    Explore agent implementations for web tasks
+  </Card>
+</CardGroup>

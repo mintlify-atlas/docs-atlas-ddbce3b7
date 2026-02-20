@@ -1,0 +1,265 @@
+---
+title: "SharedMemory"
+description: "Thread-safe shared memory module for inter-agent communication"
+---
+
+## Overview
+
+The `SharedMemory` class provides a thread-safe, key-value based memory storage system that allows multiple agents to share information. It uses locks to ensure safe concurrent access.
+
+## Class Definition
+
+```python
+class SharedMemory:
+    """Shared memory accessible by multiple agents."""
+```
+
+## Initialization
+
+### `__init__()`
+
+```python
+def __init__(self) -> None:
+    """Initialize the shared memory with thread-safe access."""
+```
+
+Creates a new SharedMemory instance with an empty dictionary storage and a threading lock.
+
+<ResponseField name="storage" type="Dict[str, Any]">
+  Internal dictionary that stores key-value pairs
+</ResponseField>
+
+<ResponseField name="lock" type="Lock">
+  Threading lock for ensuring thread-safe access
+</ResponseField>
+
+**Example:**
+
+```python
+from marble.memory import SharedMemory
+
+# Initialize shared memory for multi-agent system
+shared_memory = SharedMemory()
+```
+
+## Methods
+
+### `update()`
+
+Update shared memory with new information under a specific key.
+
+```python
+def update(self, key: str, information: Any) -> None
+```
+
+<ParamField path="key" type="str" required>
+  Key under which to store the information. Used to organize and retrieve specific data
+</ParamField>
+
+<ParamField path="information" type="Any" required>
+  Information to store. Can be any Python object (string, dict, list, etc.)
+</ParamField>
+
+**Thread Safety:** This method is thread-safe and can be called concurrently by multiple agents.
+
+**Example:**
+
+```python
+shared_memory = SharedMemory()
+
+# Different agents update shared knowledge
+shared_memory.update("task_status", "in_progress")
+shared_memory.update("discovered_items", ["key", "map", "compass"])
+shared_memory.update("agent_1_location", {"x": 10, "y": 20})
+shared_memory.update("agent_2_findings", "Found treasure in cave")
+```
+
+### `retrieve()`
+
+Retrieve information from shared memory by key.
+
+```python
+def retrieve(self, key: str) -> Any
+```
+
+<ParamField path="key" type="str" required>
+  Key of the information to retrieve
+</ParamField>
+
+<ResponseField name="return" type="Any">
+  The retrieved information, or `None` if the key does not exist
+</ResponseField>
+
+**Thread Safety:** This method is thread-safe and can be called concurrently by multiple agents.
+
+**Example:**
+
+```python
+shared_memory = SharedMemory()
+shared_memory.update("global_state", "ready")
+shared_memory.update("team_score", 150)
+
+# Agent retrieves shared information
+state = shared_memory.retrieve("global_state")
+print(state)  # Output: "ready"
+
+score = shared_memory.retrieve("team_score")
+print(score)  # Output: 150
+
+# Retrieve non-existent key
+missing = shared_memory.retrieve("nonexistent")
+print(missing)  # Output: None
+```
+
+### `retrieve_all()`
+
+Retrieve all information from shared memory.
+
+```python
+def retrieve_all(self) -> Dict[str, Any]
+```
+
+<ResponseField name="return" type="Dict[str, Any]">
+  A copy of all stored key-value pairs
+</ResponseField>
+
+**Thread Safety:** This method is thread-safe and returns a copy of the storage to prevent external modifications.
+
+**Example:**
+
+```python
+shared_memory = SharedMemory()
+shared_memory.update("task_1", "completed")
+shared_memory.update("task_2", "in_progress")
+shared_memory.update("resources", {"gold": 100, "wood": 50})
+
+# Get all shared knowledge
+all_data = shared_memory.retrieve_all()
+print(all_data)
+# Output: {
+#     "task_1": "completed",
+#     "task_2": "in_progress",
+#     "resources": {"gold": 100, "wood": 50}
+# }
+```
+
+## Usage in Multi-Agent Systems
+
+SharedMemory is typically initialized at the engine level and shared among agents:
+
+```python
+from marble.engine import Engine
+from marble.memory import SharedMemory
+
+# SharedMemory is automatically initialized based on config
+# In config YAML:
+# memory:
+#   type: "SharedMemory"
+
+# Agents can access shared memory
+class CollaborativeAgent(BaseAgent):
+    def share_findings(self, findings):
+        # Store findings in shared memory
+        self.shared_memory.update(
+            f"{self.agent_id}_findings",
+            findings
+        )
+    
+    def check_team_progress(self):
+        # Check what other agents have discovered
+        team_data = self.shared_memory.retrieve_all()
+        return team_data
+    
+    def get_peer_status(self, peer_id):
+        # Get specific agent's status
+        return self.shared_memory.retrieve(f"{peer_id}_status")
+```
+
+## Complete Example: Coordinated Search
+
+```python
+from marble.memory import SharedMemory
+import threading
+import time
+
+# Initialize shared memory
+shared_memory = SharedMemory()
+
+def agent_search(agent_id, search_area):
+    """Simulates an agent searching and sharing findings"""
+    # Update agent status
+    shared_memory.update(f"agent_{agent_id}_status", "searching")
+    
+    # Simulate search
+    time.sleep(1)
+    
+    # Share findings
+    findings = f"Found items in {search_area}"
+    shared_memory.update(f"agent_{agent_id}_findings", findings)
+    
+    # Update status
+    shared_memory.update(f"agent_{agent_id}_status", "completed")
+    
+    # Check other agents' progress
+    all_data = shared_memory.retrieve_all()
+    completed = sum(1 for k, v in all_data.items() 
+                    if k.endswith("_status") and v == "completed")
+    shared_memory.update("total_completed", completed)
+
+# Launch multiple agents in threads
+threads = []
+for i in range(3):
+    t = threading.Thread(target=agent_search, args=(i, f"sector_{i}"))
+    t.start()
+    threads.append(t)
+
+# Wait for all agents
+for t in threads:
+    t.join()
+
+# Check final results
+results = shared_memory.retrieve_all()
+print("\nFinal Shared Memory:")
+for key, value in results.items():
+    print(f"  {key}: {value}")
+
+# Output:
+# Final Shared Memory:
+#   agent_0_status: completed
+#   agent_0_findings: Found items in sector_0
+#   agent_1_status: completed
+#   agent_1_findings: Found items in sector_1
+#   agent_2_status: completed
+#   agent_2_findings: Found items in sector_2
+#   total_completed: 3
+```
+
+## Configuration
+
+To use SharedMemory in your MARBLE configuration:
+
+```yaml
+memory:
+  type: "SharedMemory"
+```
+
+Alternatively, use BaseMemory for independent agent memory:
+
+```yaml
+memory:
+  type: "BaseMemory"
+```
+
+## Thread Safety
+
+All methods in SharedMemory use Python's `threading.Lock` to ensure thread-safe operations:
+
+- Multiple agents can safely call `update()`, `retrieve()`, and `retrieve_all()` concurrently
+- Lock acquisition is automatic and transparent to users
+- Operations are atomic at the method level
+
+## See Also
+
+- [BaseMemory](/api/memory/base-memory) - Individual agent memory storage
+- [Multi-Agent Systems](/core-concepts/multi-agent) - Setting up coordinated agent systems
+- [Engine Configuration](/api/engine) - Configuring memory at the engine level

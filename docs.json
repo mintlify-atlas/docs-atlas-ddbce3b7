@@ -1,122 +1,138 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "MARBLE",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#7C3AED",
+    "light": "#A78BFA",
+    "dark": "#5B21B6"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/ulab-uiuc/MARBLE"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/ulab-uiuc/MARBLE"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
               "index",
-              "quickstart",
-              "development"
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/architecture",
+              "concepts/agents",
+              "concepts/environments",
+              "concepts/engine",
+              "concepts/memory",
+              "concepts/evaluation"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Environments",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "environments/overview",
+              "environments/werewolf",
+              "environments/research",
+              "environments/coding",
+              "environments/database",
+              "environments/minecraft",
+              "environments/web"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Configuration",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "configuration/overview",
+              "configuration/agents",
+              "configuration/environments",
+              "configuration/coordination"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/running-simulations",
+              "guides/creating-agents",
+              "guides/custom-environments",
+              "guides/evaluation-metrics"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core",
             "pages": [
-              "api-reference/introduction"
+              "api/engine",
+              "api/base-agent",
+              "api/base-environment"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Agents",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/agents/base-agent",
+              "api/agents/werewolf-agent"
+            ]
+          },
+          {
+            "group": "Environments",
+            "pages": [
+              "api/environments/base-env",
+              "api/environments/coding-env",
+              "api/environments/research-env",
+              "api/environments/db-env",
+              "api/environments/werewolf-env"
+            ]
+          },
+          {
+            "group": "Memory",
+            "pages": [
+              "api/memory/base-memory",
+              "api/memory/shared-memory"
+            ]
+          },
+          {
+            "group": "Evaluation",
+            "pages": [
+              "api/evaluator"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Benchmarks",
+        "groups": [
+          {
+            "group": "MultiAgentBench",
+            "pages": [
+              "benchmarks/overview",
+              "benchmarks/coding",
+              "benchmarks/research",
+              "benchmarks/database",
+              "benchmarks/minecraft",
+              "benchmarks/bargaining"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

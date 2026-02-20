@@ -1,0 +1,279 @@
+---
+title: Agent Configuration
+description: Configure agents with profiles, strategies, and specialized capabilities
+---
+
+Agents are the core execution units in MARBLE. Each agent has a unique identity, profile, and capabilities tailored to specific roles.
+
+## Agent Configuration Parameters
+
+<ParamField path="type" type="string" required>
+  The agent class to instantiate. Options:
+  - `BaseAgent`: General-purpose agent for any task
+  - `CodingAgent`: Specialized for software development tasks
+</ParamField>
+
+<ParamField path="agent_id" type="string" required>
+  Unique identifier for the agent. Used in relationships and task assignments.
+  
+  **Example**: `"agent1"`, `"developer"`, `"researcher"`
+</ParamField>
+
+<ParamField path="profile" type="string" required>
+  Natural language description of the agent's role, personality, and capabilities. This shapes the agent's behavior and decision-making.
+  
+  **Best practices**:
+  - Be specific about expertise and responsibilities
+  - Define what the agent CAN and CANNOT do
+  - Specify preferred tools or methods
+  - Include personality traits for collaborative behavior
+</ParamField>
+
+<ParamField path="strategy" type="string">
+  Reasoning strategy for problem-solving. Options:
+  - `cot` (Chain of Thought): Step-by-step reasoning
+  - `react`: Observation-Thought-Action framework
+  - `reflexion`: Self-reflection and revision
+  - `default`: Standard response generation
+  
+  Strategies are defined in `prompt_config.yaml`.
+</ParamField>
+
+## BaseAgent Configuration
+
+General-purpose agents for research, discussion, and coordination tasks:
+
+```yaml
+agents:
+  - type: BaseAgent
+    agent_id: agent1
+    profile: |
+      You are an AI researcher with a strategic and forward-thinking mindset.
+      Your expertise lies in AI ethics and policy. You excel at:
+      - Analyzing long-term implications of AI technologies
+      - Evaluating ethical considerations
+      - Synthesizing diverse perspectives into coherent recommendations
+
+  - type: BaseAgent
+    agent_id: agent2
+    strategy: react
+    profile: |
+      You are a software developer specializing in AI applications in healthcare.
+      You are practical and focused on immediate applications and potential risks.
+      You prefer to observe data, think through implications, then act.
+```
+
+## CodingAgent Configuration
+
+Specialized agents for software development with access to coding tools:
+
+```yaml
+environment:
+  type: Coding
+  name: "Coding Environment"
+  workspace_dir: "workspace"
+  max_iterations: 5
+
+agents:
+  - type: CodingAgent
+    agent_id: agent1
+    profile: |
+      I am a Senior Software Developer specialized in Python development.
+      I am good at creating the code framework from scratch based on task requirements.
+      I **have to** call "create_code" action to create code in the first iteration.
+      I **can't** call "give_advice_and_revise_code" action because I should let
+      other agents revise the code after I create the initial framework.
+
+  - type: CodingAgent
+    agent_id: agent2
+    profile: |
+      I am a Senior Software Developer specialized in Python development.
+      I am better at adding missing functionality based on my understanding
+      of the task requirements.
+      I **have to** call "give_advice_and_revise_code" action to revise code.
+      I **can't** call "create_code" action since I don't create from scratch.
+
+  - type: CodingAgent
+    agent_id: agent3
+    profile: |
+      I am a Senior Software Developer specialized in Python development.
+      I am better at fixing existing issues and optimizing code based on
+      my innovation and creativity.
+      I **have to** call "give_advice_and_revise_code" action.
+      I **can't** call "create_code" action.
+```
+
+## Reasoning Strategies
+
+Configure how agents approach problem-solving:
+
+### Chain of Thought (CoT)
+
+Step-by-step reasoning with explicit thought process:
+
+```yaml
+agents:
+  - type: BaseAgent
+    agent_id: analyst
+    strategy: cot
+    profile: |
+      You are a data analyst who thinks through problems systematically.
+      Break down complex problems into steps, showing your reasoning at each stage.
+```
+
+### ReAct (Reasoning and Acting)
+
+Observe, think, then act based on observations:
+
+```yaml
+agents:
+  - type: BaseAgent
+    agent_id: researcher
+    strategy: react
+    profile: |
+      You are a researcher who carefully observes information,
+      reasons about it, and decides on the next action.
+```
+
+### Reflexion
+
+Self-reflection with iterative improvement:
+
+```yaml
+agents:
+  - type: BaseAgent
+    agent_id: reviewer
+    strategy: reflexion
+    profile: |
+      You are a code reviewer who drafts responses, reflects on them,
+      and revises to improve quality.
+```
+
+## Complete Multi-Agent Example
+
+Here's a full configuration for a collaborative software development team:
+
+```yaml
+coordinate_mode: graph
+
+relationships:
+  - [agent1, agent2, "collaborates with"]
+  - [agent2, agent1, "collaborates with"]
+  - [agent1, agent3, "collaborates with"]
+  - [agent3, agent1, "collaborates with"]
+  - [agent2, agent3, "collaborates with"]
+  - [agent3, agent2, "collaborates with"]
+
+llm: "together_ai/meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+
+environment:
+  type: Coding
+  name: "Coding Environment"
+  workspace_dir: "workspace"
+  max_iterations: 5
+
+task:
+  content: |
+    Software Development Task:
+    
+    Please write a program called 'Team_Treasure_Hunt' that is a multiplayer
+    action game where teams collaborate to navigate environments, collect
+    treasures, and solve puzzles.
+    
+    1. Implementation requirements:
+       - Multiplayer support for up to four players per team
+       - Different environments with varying difficulty levels
+       - Unique character abilities (strength, agility, intelligence, stealth)
+       - Scoring system based on treasures collected and completion time
+       - Comprehensive test specifications
+    
+    2. Project structure:
+       - solution.py (main implementation)
+    
+    3. Development process:
+       - Developer: Create the code framework
+       - Developer: Add missing features
+       - Developer: Optimize and fix issues
+
+agents:
+  - type: CodingAgent
+    agent_id: agent1
+    profile: |
+      I am a Senior Software Developer specialized in Python development.
+      I create code frameworks from scratch based on task descriptions.
+      I **must** call "create_code" action first.
+      Agent 2 should add missing functions after me.
+      Agent 3 should optimize after agent 2.
+
+  - type: CodingAgent
+    agent_id: agent2
+    profile: |
+      I am a Senior Software Developer specialized in Python development.
+      I add missing functionality based on task requirements.
+      I **must** call "give_advice_and_revise_code" action.
+      I work after agent 1 creates the framework.
+
+  - type: CodingAgent
+    agent_id: agent3
+    profile: |
+      I am a Senior Software Developer specialized in Python development.
+      I fix issues and optimize code with innovation and creativity.
+      I **must** call "give_advice_and_revise_code" action.
+      I work after agent 2 adds functionality.
+
+memory:
+  type: SharedMemory
+
+metrics:
+  evaluate_llm: "gpt-4o-mini"
+  code_quality: true
+  test_coverage: true
+  collaboration_effectiveness: true
+
+engine_planner:
+  initial_progress: "Starting the software development project with team coordination."
+
+output:
+  format: jsonl
+  file_path: "result/development_output.jsonl"
+```
+
+## Agent Actions
+
+### CodingAgent Actions
+
+CodingAgents have access to specialized actions:
+
+- `create_code`: Create new code files in the workspace
+- `give_advice_and_revise_code`: Review and modify existing code
+- `read_file`: Read file contents from workspace
+- `list_files`: List files in workspace directory
+
+### BaseAgent Actions
+
+BaseAgents can use environment-specific actions:
+
+- **Web Environment**: Search engines (Google, Bing, Wikipedia)
+- **Base Environment**: General communication and reasoning
+- **Research Environment**: Academic search and paper retrieval
+
+<Warning>
+  **Profile Constraints**: Use explicit language like "must", "can't", "have to" in profiles to enforce agent behavior patterns. This prevents agents from calling inappropriate actions.
+</Warning>
+
+## Best Practices
+
+1. **Clear Role Definition**: Make each agent's responsibilities explicit and non-overlapping
+2. **Complementary Skills**: Design agent profiles to work together effectively
+3. **Explicit Constraints**: Use strong language ("must", "cannot") to prevent unwanted behavior
+4. **Strategy Matching**: Choose reasoning strategies that match the agent's role:
+   - CoT for analytical tasks
+   - ReAct for research and exploration
+   - Reflexion for quality-focused roles
+5. **Model Selection**: Use more capable models (GPT-4) for complex reasoning, lighter models for simple tasks
+
+## Next Steps
+
+<Card title="Environment Configuration" icon="cube" href="./environments">
+  Configure execution environments with tools and resources for your agents
+</Card>

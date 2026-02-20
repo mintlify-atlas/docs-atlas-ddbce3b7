@@ -1,0 +1,630 @@
+---
+title: 'Evaluation Metrics'
+description: 'Understand how MARBLE evaluates multi-agent performance'
+icon: 'chart-line'
+---
+
+## Overview
+
+The Evaluator in MARBLE provides comprehensive metrics for assessing multi-agent system performance across multiple dimensions: communication quality, planning effectiveness, task completion, and agent contributions.
+
+## Evaluator Architecture
+
+```
+┌──────────────────────────────────────────────────┐
+│                  Evaluator                       │
+│                                                  │
+│  ┌────────────────────────────────────────────┐ │
+│  │         Communication Metrics              │ │
+│  │  - Message relevance                       │ │
+│  │  - Information exchange quality            │ │
+│  │  - Coordination effectiveness              │ │
+│  └────────────────────────────────────────────┘ │
+│                                                  │
+│  ┌────────────────────────────────────────────┐ │
+│  │          Planning Metrics                  │ │
+│  │  - Task assignment quality                 │ │
+│  │  - Agent utilization                       │ │
+│  │  - Progress toward goals                   │ │
+│  └────────────────────────────────────────────┘ │
+│                                                  │
+│  ┌────────────────────────────────────────────┐ │
+│  │           Task Metrics                     │ │
+│  │  - Completion rate                         │ │
+│  │  - Output quality                          │ │
+│  │  - Domain-specific evaluation              │ │
+│  └────────────────────────────────────────────┘ │
+│                                                  │
+│  ┌────────────────────────────────────────────┐ │
+│  │           Agent KPIs                       │ │
+│  │  - Milestones achieved                     │ │
+│  │  - Contribution tracking                   │ │
+│  │  - Token consumption                       │ │
+│  └────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────┘
+```
+
+## Evaluator Class
+
+The core evaluator manages all metrics:
+
+```python marble/evaluator/evaluator.py
+class Evaluator:
+    """
+    Evaluator class for tracking metrics like task completion 
+    success rate and token consumption.
+    """
+    
+    def __init__(self, metrics_config: Dict[str, Any]):
+        """
+        Initialize the Evaluator with the specified metrics.
+        
+        Args:
+            metrics_config (Dict[str, Any]): Configuration for metrics to track.
+        """
+        self.logger = get_logger(self.__class__.__name__)
+        self.metrics_config = metrics_config
+        self.metrics: Dict[str, Any] = {
+            "task_completion": [],
+            "token_consumption": [],
+            "planning_score": [],
+            "communication_score": [],
+            "task_evaluation": {},
+            "total_milestones": 0,
+            "agent_kpis": {},
+            "code_quality": {}
+        }
+        
+        # Load evaluation prompts
+        with open('evaluator/evaluator_prompts.json', 'r', encoding='utf-8') as f:
+            self.evaluation_prompts = json.load(f)
+        
+        # Configure evaluation LLM
+        evaluate_llm_config = self.metrics_config.get('evaluate_llm', {})
+        self.llm = evaluate_llm_config.get('model', 'gpt-3.5-turbo')
+```
+
+See [marble/evaluator/evaluator.py:18-46](/home/daytona/workspace/source/marble/evaluator/evaluator.py#L18-L46)
+
+## Communication Evaluation
+
+Assesses the quality of inter-agent communication:
+
+```python
+def evaluate_communication(self, task: str, communications: str) -> None:
+    """
+    Evaluate communication between agents and update the communication score.
+    
+    Args:
+        task (str): The task description.
+        communications (str): The communication logs between agents.
+    """
+    # Get the communication prompt template
+    communication_prompt_template = self.evaluation_prompts["Graph"]["Communication"]["prompt"]
+    
+    # Fill in the placeholders {task} and {communications}
+    prompt = communication_prompt_template.format(
+        task=task,
+        communications=communications
+    )
+    
+    # Call the language model
+    result = model_prompting(
+        llm_model=self.llm,
+        messages=[{"role": "user", "content": prompt}],
+        return_num=1,
+        max_token_num=512,
+        temperature=0.0,
+        top_p=None,
+        stream=None,
+    )[0]
+    
+    # Parse the score from result.content
+    score = self.parse_score(result.content)
+    
+    # Update the metric
+    self.metrics["communication_score"].append(score)
+```
+
+See [marble/evaluator/evaluator.py:67-93](/home/daytona/workspace/source/marble/evaluator/evaluator.py#L67-L93)
+
+**Scoring Criteria**:
+- **1**: Poor - Irrelevant or confusing messages
+- **2**: Below Average - Some relevant information, but unclear
+- **3**: Average - Adequate information exchange
+- **4**: Good - Clear and relevant communication
+- **5**: Excellent - Highly effective coordination
+
+<Info>
+  Communication scores are computed using LLM-based evaluation, allowing for nuanced assessment of message quality and coordination effectiveness.
+</Info>
+
+## Planning Evaluation
+
+Assesses how well agents are assigned tasks and make progress:
+
+```python
+def evaluate_planning(
+    self,
+    summary: str,
+    agent_profiles: str,
+    agent_tasks: str,
+    results: str
+) -> None:
+    """
+    Evaluate planning and self-coordination among agents.
+    
+    Args:
+        summary (str): Last round summary.
+        agent_profiles (str): Profiles of agents.
+        agent_tasks (str): Tasks assigned to agents.
+        results (str): Results of the next round.
+    """
+    # Get the planning prompt template
+    planning_prompt_template = self.evaluation_prompts["Graph"]["Planning"]["prompt"]
+    
+    # Fill in the placeholders
+    prompt = planning_prompt_template.format(
+        summary=summary,
+        agent_profiles=agent_profiles,
+        agent_tasks=agent_tasks,
+        results=results
+    )
+    
+    # Call the language model
+    result = model_prompting(
+        llm_model=self.llm,
+        messages=[{"role": "user", "content": prompt}],
+        return_num=1,
+        max_token_num=512,
+        temperature=0.0,
+        top_p=None,
+        stream=None,
+    )[0]
+    
+    # Parse the score
+    score = self.parse_score(result.content)
+    
+    # Update the metric
+    self.metrics["planning_score"].append(score)
+```
+
+See [marble/evaluator/evaluator.py:95-128](/home/daytona/workspace/source/marble/evaluator/evaluator.py#L95-L128)
+
+**Scoring Criteria**:
+- **1**: Poor - Misaligned tasks, wasted effort
+- **2**: Below Average - Some tasks align with goals
+- **3**: Average - Reasonable task assignment
+- **4**: Good - Efficient use of agent capabilities
+- **5**: Excellent - Optimal coordination and progress
+
+## KPI Tracking
+
+Tracks milestones and individual agent contributions:
+
+```python
+def evaluate_kpi(self, task: str, agent_results: str) -> None:
+    """
+    Evaluate milestones achieved and update agent KPIs.
+    
+    Args:
+        task (str): The task description.
+        agent_results (str): The results from the agents.
+    """
+    # Truncate if too long
+    MAX_LENGTH = 7200
+    if len(agent_results) > MAX_LENGTH:
+        agent_results = agent_results[:MAX_LENGTH] + "..."
+    
+    # Get the KPI prompt template
+    kpi_prompt_template = self.evaluation_prompts["Graph"]["KPI"]["prompt"]
+    
+    # Fill in the placeholders
+    prompt = kpi_prompt_template.format(
+        task=task,
+        agent_results=agent_results
+    )
+    
+    # Call the language model
+    result = model_prompting(
+        llm_model=self.llm,
+        messages=[{"role": "user", "content": prompt}],
+        return_num=1,
+        max_token_num=512,
+        temperature=0.0,
+        top_p=None,
+        stream=None,
+    )[0]
+    
+    # Parse the milestones
+    milestones = self.parse_milestones(result.content)
+    
+    # Update the metrics
+    self.metrics["total_milestones"] += len(milestones)
+    for milestone in milestones:
+        agents = milestone.get("contributing_agents", [])
+        for agent_id in agents:
+            if agent_id in self.metrics["agent_kpis"]:
+                self.metrics["agent_kpis"][agent_id] += 1
+            else:
+                self.metrics["agent_kpis"][agent_id] = 1
+```
+
+See [marble/evaluator/evaluator.py:130-168](/home/daytona/workspace/source/marble/evaluator/evaluator.py#L130-L168)
+
+**Milestone Format**:
+```json
+[
+  {
+    "milestone": "Completed literature review",
+    "contributing_agents": ["agent1", "agent2"]
+  },
+  {
+    "milestone": "Drafted research proposal",
+    "contributing_agents": ["agent3"]
+  }
+]
+```
+
+<Note>
+  KPI tracking allows you to **quantify individual agent contributions** and identify which agents are driving progress toward task completion.
+</Note>
+
+## Domain-Specific Evaluation
+
+### Research Task Evaluation
+
+Evaluates research outputs on innovation, feasibility, and safety:
+
+```python
+def evaluate_task_research(self, task: str, result: str) -> None:
+    """
+    Evaluate the final research idea based on innovation, 
+    safety, and feasibility.
+    
+    Args:
+        task (str): The task description.
+        result (str): The final research idea.
+    """
+    # Get the research evaluation prompt
+    research_prompt_template = self.evaluation_prompts["research"]["task_evaluation"]["prompt"]
+    
+    # Fill in the placeholders
+    prompt = research_prompt_template.format(task=task, result=result)
+    
+    # Call the language model
+    llm_response = model_prompting(
+        llm_model=self.llm,
+        messages=[{"role": "user", "content": prompt}],
+        return_num=1,
+        max_token_num=512,
+        temperature=0.0,
+        top_p=None,
+        stream=None,
+    )[0]
+    
+    # Parse the ratings
+    ratings = self.parse_research_ratings(llm_response.content)
+    
+    # Update the metrics
+    if ratings:
+        self.metrics["task_evaluation"] = ratings
+    else:
+        self.logger.error("Failed to parse research ratings.")
+```
+
+See [marble/evaluator/evaluator.py:170-199](/home/daytona/workspace/source/marble/evaluator/evaluator.py#L170-L199)
+
+**Research Ratings**:
+```json
+{
+  "innovation": 4,
+  "feasibility": 3,
+  "safety": 5,
+  "potential_impact": 4
+}
+```
+
+### Database Task Evaluation
+
+Evaluates database diagnosis accuracy:
+
+```python
+def evaluate_task_db(
+    self,
+    task: str,
+    result: str,
+    labels: List[str],
+    pred_num: int,
+    root_causes: List[str]
+) -> None:
+    """
+    Evaluate the final database diagnosis.
+    
+    Args:
+        task (str): The task description.
+        result (str): The final root cause analysis.
+        labels (List[str]): The list of root cause labels.
+        pred_num (int): The number of predicted root causes.
+        root_causes (List[str]): The actual root cause labels.
+    """
+    self.metrics["task_evaluation"] = {
+        'root_cause': root_causes,
+        'predicted': result,
+    }
+```
+
+See [marble/evaluator/evaluator.py:284-300](/home/daytona/workspace/source/marble/evaluator/evaluator.py#L284-L300)
+
+### Code Quality Evaluation
+
+Evaluates generated code on multiple criteria:
+
+```python
+def evaluate_code_quality(self, task: str, code_result: str) -> None:
+    """
+    Evaluate the code quality based on stricter criteria.
+    """
+    # Load task requirements
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = yaml.load(f)
+    
+    full_task_description = config['task']['content']
+    requirements = extract_requirements(full_task_description)
+    
+    # Load solution code
+    with open(solution_path, 'r', encoding='utf-8') as f:
+        solution_content = f.read()
+    
+    # Create evaluation prompt
+    code_quality_prompt = """
+    [Context]
+    **Task Description:** {task_description}
+    **Implementation Requirements:** {requirements}
+    **Current Solution:** {solution}
+    
+    [Evaluation Criteria]
+    1. **Instruction-Following**: Does the code fulfill all requirements?
+    2. **Executability**: Is the code syntactically correct and executable?
+    3. **Consistency**: Is the code consistent in naming and formatting?
+    4. **Quality**: Is the code well-documented, clear, and modular?
+    
+    [Scoring]
+    - 1: Below Average - Significant issues
+    - 2: Average - Noticeable areas for improvement
+    - 3: Good - Minor issues or improvements needed
+    - 4: Excellent - Almost or fully satisfies the criterion
+    - 5: Legendary - Flawless, exceeds expectations
+    
+    Output scores in JSON format:
+    {{
+        "instruction_following": score,
+        "executability": score,
+        "consistency": score,
+        "quality": score
+    }}
+    """
+    
+    # Call LLM
+    response = model_prompting(
+        llm_model=self.llm,
+        messages=[{"role": "user", "content": prompt}],
+        return_num=1,
+        max_token_num=4096,
+        temperature=0.0,
+    )[0]
+    
+    # Parse scores
+    scores = self.parse_code_quality_scores(response.content)
+    self.metrics["code_quality"] = scores
+```
+
+See [marble/evaluator/evaluator.py:509-618](/home/daytona/workspace/source/marble/evaluator/evaluator.py#L509-L618)
+
+## Score Parsing
+
+Robust JSON parsing for LLM responses:
+
+```python
+def parse_score(self, assistant_answer: str) -> int:
+    """
+    Parse the score from the assistant's answer based on 
+    strict JSON format requirement.
+    
+    Args:
+        assistant_answer (str): The assistant's answer containing the score.
+    
+    Returns:
+        int: The parsed score. Returns 3 (default) if parsing fails.
+    """
+    try:
+        # Clean the response content
+        content = assistant_answer.strip()
+        
+        # Remove markdown code block markers if present
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+        
+        # Find the JSON object
+        json_start = content.find('{')
+        json_end = content.rfind('}') + 1
+        
+        if json_start >= 0 and json_end > json_start:
+            json_str = content[json_start:json_end]
+            rating_data = json.loads(json_str)
+            
+            if isinstance(rating_data, dict) and "rating" in rating_data:
+                score = int(rating_data["rating"])
+                if 1 <= score <= 5:
+                    return score
+        
+        # If JSON parsing fails, try to find a single digit between 1-5
+        numbers = re.findall(r'\b[1-5]\b', content)
+        if numbers:
+            return int(numbers[0])
+        
+        # Default score if all parsing attempts fail
+        return 3
+        
+    except Exception as e:
+        self.logger.error(f"Unexpected error parsing score: {e}")
+        return 3
+```
+
+See [marble/evaluator/evaluator.py:331-389](/home/daytona/workspace/source/marble/evaluator/evaluator.py#L331-L389)
+
+## Metrics Collection
+
+The Engine automatically collects metrics during execution:
+
+```python
+# Communication evaluation
+if iteration_data["communications"]:
+    communications_str = self._format_communications(
+        iteration_data["communications"]
+    )
+    self.evaluator.evaluate_communication(self.task, communications_str)
+else:
+    self.evaluator.metrics["communication_score"].append(-1)
+
+# Planning evaluation
+agent_profiles = self._get_agent_profiles()
+agent_tasks_str = self._format_agent_tasks(iteration_data["task_assignments"])
+results_str = self._format_results(iteration_data["task_results"])
+self.evaluator.evaluate_planning(
+    iteration_data["summary"],
+    agent_profiles,
+    agent_tasks_str,
+    results_str,
+)
+
+# KPI evaluation
+self.evaluator.evaluate_kpi(self.task, results_str)
+```
+
+Evaluation is called in coordination methods throughout [marble/engine/engine.py](/home/daytona/workspace/source/marble/engine/engine.py).
+
+## Finalization and Reporting
+
+```python
+def finalize(self) -> None:
+    """
+    Finalize the evaluation, compute final metrics, 
+    and log or save the results.
+    """
+    total_tasks = len(self.metrics["task_completion"])
+    tasks_completed = sum(self.metrics["task_completion"])
+    success_rate = tasks_completed / total_tasks if total_tasks > 0 else 0
+    
+    total_tokens = sum(self.metrics["token_consumption"])
+    avg_tokens_per_iteration = total_tokens / total_tasks if total_tasks > 0 else 0
+    
+    self.logger.info(f"Task Completion Success Rate: {success_rate * 100:.2f}%")
+    self.logger.info(f"Total Token Consumption: {total_tokens}")
+    self.logger.info(f"Average Tokens per Iteration: {avg_tokens_per_iteration}")
+
+def get_metrics(self) -> Dict[str, Any]:
+    """
+    Get the computed metrics.
+    
+    Returns:
+        Dict[str, Any]: The computed metrics.
+    """
+    return {
+        "success_rate": sum(self.metrics["task_completion"]) / len(self.metrics["task_completion"]),
+        "total_tokens": sum(self.metrics["token_consumption"]),
+        "avg_tokens_per_iteration": sum(self.metrics["token_consumption"]) / len(self.metrics["token_consumption"])
+    }
+```
+
+See [marble/evaluator/evaluator.py:391-419](/home/daytona/workspace/source/marble/evaluator/evaluator.py#L391-L419)
+
+## Output Format
+
+Metrics are written to JSONL format for analysis:
+
+```json
+{
+  "task": "Research AI safety approaches",
+  "coordination_mode": "graph",
+  "iterations": [
+    {
+      "iteration": 1,
+      "task_assignments": {"agent1": "...", "agent2": "..."},
+      "task_results": [...],
+      "summary": "...",
+      "communications": [...],
+      "continue_simulation": true
+    }
+  ],
+  "planning_scores": [4, 3, 5],
+  "communication_scores": [3, 4, 4],
+  "token_usage": {"total": 15420, "by_agent": {...}},
+  "agent_kpis": {"agent1": 5, "agent2": 3, "agent3": 7},
+  "total_milestones": 15,
+  "task_evaluation": {"innovation": 4, "feasibility": 3}
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Regular Evaluation" icon="clock">
+    Evaluate at every iteration, not just at the end, to track progress over time
+  </Card>
+  
+  <Card title="Multiple Metrics" icon="chart-mixed">
+    Use multiple evaluation dimensions (communication, planning, KPIs) for comprehensive assessment
+  </Card>
+  
+  <Card title="Domain-Specific" icon="bullseye">
+    Implement custom evaluation for your domain (like code quality for coding tasks)
+  </Card>
+  
+  <Card title="Baseline Comparison" icon="scale-balanced">
+    Establish baselines and compare across different coordination modes
+  </Card>
+</CardGroup>
+
+<Warning>
+  LLM-based evaluation can be **subjective** and may vary between runs. Use multiple evaluation runs and aggregate results for more reliable metrics.
+</Warning>
+
+## Evaluation Configuration
+
+Configure evaluation in your config file:
+
+```yaml
+metrics:
+  evaluate_llm:
+    model: "gpt-4"  # Use GPT-4 for more reliable evaluation
+  
+  enable_communication_eval: true
+  enable_planning_eval: true
+  enable_kpi_tracking: true
+  
+  custom_metrics:
+    - name: "code_quality"
+      enabled: true
+```
+
+## Related Concepts
+
+<CardGroup cols={3}>
+  <Card title="Engine" icon="gears" href="/concepts/engine">
+    See how evaluation integrates
+  </Card>
+  
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Understand the full system
+  </Card>
+  
+  <Card title="Agents" icon="user-robot" href="/concepts/agents">
+    Learn about agent metrics
+  </Card>
+</CardGroup>

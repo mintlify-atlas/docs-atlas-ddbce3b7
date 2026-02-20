@@ -1,0 +1,545 @@
+---
+title: "Evaluator"
+description: "Metrics tracking and evaluation system for agent performance"
+---
+
+## Overview
+
+The `Evaluator` class provides comprehensive metrics tracking and LLM-based evaluation for multi-agent systems. It monitors task completion, token consumption, communication quality, planning effectiveness, and more.
+
+## Class Definition
+
+```python
+class Evaluator:
+    """Evaluator class for tracking metrics like task completion success rate and token consumption."""
+```
+
+## Initialization
+
+### `__init__()`
+
+```python
+def __init__(self, metrics_config: Dict[str, Any])
+```
+
+<ParamField path="metrics_config" type="Dict[str, Any]" required>
+  Configuration dictionary specifying which metrics to track and evaluation settings
+  
+  **Structure:**
+  - `evaluate_llm`: LLM configuration for evaluations (dict or string)
+    - `model`: Model name (e.g., "gpt-3.5-turbo", "gpt-4")
+</ParamField>
+
+**Tracked Metrics:**
+
+The evaluator automatically initializes tracking for:
+- `task_completion`: List of binary success indicators (0 or 1)
+- `token_consumption`: List of token counts per iteration
+- `planning_score`: List of planning quality scores (1-5)
+- `communication_score`: List of communication quality scores (1-5)
+- `task_evaluation`: Dictionary of task-specific evaluation metrics
+- `total_milestones`: Count of milestones achieved
+- `agent_kpis`: Dictionary tracking individual agent contributions
+- `code_quality`: Dictionary of code quality scores
+
+**Example:**
+
+```python
+from marble.evaluator import Evaluator
+
+# Initialize evaluator with configuration
+metrics_config = {
+    "evaluate_llm": {
+        "model": "gpt-4"
+    }
+}
+
+evaluator = Evaluator(metrics_config=metrics_config)
+```
+
+## Core Methods
+
+### `update()`
+
+Update metrics based on current environment and agent states.
+
+```python
+def update(self, environment: BaseEnvironment, agents: List[BaseAgent]) -> None
+```
+
+<ParamField path="environment" type="BaseEnvironment" required>
+  The environment instance containing task state
+</ParamField>
+
+<ParamField path="agents" type="List[BaseAgent]" required>
+  List of agent instances to collect metrics from
+</ParamField>
+
+**Metrics Updated:**
+- Checks if task is completed via `environment.is_task_completed()`
+- Sums token usage from all agents via `agent.get_token_usage()`
+
+**Example:**
+
+```python
+from marble.engine import Engine
+
+# In engine's main loop
+for iteration in range(max_iterations):
+    # Agents perform actions
+    for agent in agents:
+        agent.step()
+    
+    # Update metrics
+    evaluator.update(environment, agents)
+```
+
+### `finalize()`
+
+Finalize evaluation and compute aggregate metrics.
+
+```python
+def finalize(self) -> None
+```
+
+Computes and logs:
+- Task completion success rate
+- Total token consumption
+- Average tokens per iteration
+
+**Example:**
+
+```python
+# At end of simulation
+evaluator.finalize()
+
+# Output logged:
+# Task Completion Success Rate: 85.00%
+# Total Token Consumption: 12450
+# Average Tokens per Iteration: 1245.0
+```
+
+### `get_metrics()`
+
+Retrieve computed metrics programmatically.
+
+```python
+def get_metrics(self) -> Dict[str, Any]
+```
+
+<ResponseField name="return" type="Dict[str, Any]">
+  Dictionary containing:
+  - `success_rate`: Float between 0 and 1
+  - `total_tokens`: Integer sum of all token usage
+  - `avg_tokens_per_iteration`: Float average tokens per iteration
+</ResponseField>
+
+**Example:**
+
+```python
+metrics = evaluator.get_metrics()
+
+print(f"Success Rate: {metrics['success_rate'] * 100:.1f}%")
+print(f"Total Tokens: {metrics['total_tokens']}")
+print(f"Avg Tokens/Iteration: {metrics['avg_tokens_per_iteration']:.1f}")
+
+# Output:
+# Success Rate: 85.0%
+# Total Tokens: 12450
+# Avg Tokens/Iteration: 1245.0
+```
+
+## LLM-Based Evaluation Methods
+
+### `evaluate_communication()`
+
+Evaluate the quality of communication between agents using LLM.
+
+```python
+def evaluate_communication(self, task: str, communications: str) -> None
+```
+
+<ParamField path="task" type="str" required>
+  The task description
+</ParamField>
+
+<ParamField path="communications" type="str" required>
+  Communication logs between agents
+</ParamField>
+
+**Scoring:** Returns a score from 1-5, stored in `metrics["communication_score"]`
+
+**Example:**
+
+```python
+task = "Collaborate to solve a complex research problem"
+communications = """
+Agent1: I'll analyze the data patterns
+Agent2: I'll handle the statistical modeling
+Agent1: Great, I found anomalies in sector 3
+Agent2: That aligns with my regression results
+"""
+
+evaluator.evaluate_communication(task, communications)
+print(evaluator.metrics["communication_score"])  # [4]
+```
+
+### `evaluate_planning()`
+
+Evaluate planning and self-coordination quality using LLM.
+
+```python
+def evaluate_planning(self, summary: str, agent_profiles: str, 
+                      agent_tasks: str, results: str) -> None
+```
+
+<ParamField path="summary" type="str" required>
+  Summary from the last round
+</ParamField>
+
+<ParamField path="agent_profiles" type="str" required>
+  Profiles of all agents
+</ParamField>
+
+<ParamField path="agent_tasks" type="str" required>
+  Tasks assigned to agents
+</ParamField>
+
+<ParamField path="results" type="str" required>
+  Results from the next round
+</ParamField>
+
+**Scoring:** Returns a score from 1-5, stored in `metrics["planning_score"]`
+
+**Example:**
+
+```python
+summary = "Team needs to optimize resource allocation"
+agent_profiles = "Agent1: Analyst, Agent2: Optimizer"
+agent_tasks = "Agent1: Analyze usage, Agent2: Propose optimization"
+results = "Successfully reduced resource usage by 30%"
+
+evaluator.evaluate_planning(summary, agent_profiles, agent_tasks, results)
+print(evaluator.metrics["planning_score"])  # [5]
+```
+
+### `evaluate_kpi()`
+
+Evaluate milestones achieved and track agent contributions.
+
+```python
+def evaluate_kpi(self, task: str, agent_results: str) -> None
+```
+
+<ParamField path="task" type="str" required>
+  The task description
+</ParamField>
+
+<ParamField path="agent_results" type="str" required>
+  Results from all agents (automatically truncated if > 7200 chars)
+</ParamField>
+
+**Metrics Updated:**
+- `total_milestones`: Incremented by number of milestones achieved
+- `agent_kpis`: Per-agent contribution counts
+
+**Example:**
+
+```python
+task = "Build a recommendation system"
+agent_results = """
+Agent1: Completed data preprocessing
+Agent2: Implemented collaborative filtering
+Agent3: Deployed API endpoint
+"""
+
+evaluator.evaluate_kpi(task, agent_results)
+
+print(f"Total milestones: {evaluator.metrics['total_milestones']}")
+print(f"Agent KPIs: {evaluator.metrics['agent_kpis']}")
+# Output:
+# Total milestones: 3
+# Agent KPIs: {'Agent1': 1, 'Agent2': 1, 'Agent3': 1}
+```
+
+## Domain-Specific Evaluation Methods
+
+### `evaluate_task_research()`
+
+Evaluate research tasks based on innovation, safety, and feasibility.
+
+```python
+def evaluate_task_research(self, task: str, result: str) -> None
+```
+
+<ParamField path="task" type="str" required>
+  The research task description
+</ParamField>
+
+<ParamField path="result" type="str" required>
+  The final research idea/output
+</ParamField>
+
+**Metrics Updated:** `task_evaluation` with innovation, safety, and feasibility scores
+
+**Example:**
+
+```python
+task = "Develop novel approach to quantum error correction"
+result = "Proposed surface code variant with 40% reduced overhead"
+
+evaluator.evaluate_task_research(task, result)
+print(evaluator.metrics["task_evaluation"])
+# Output: {'innovation': 5, 'safety': 4, 'feasibility': 4}
+```
+
+### `evaluate_task_world()`
+
+Evaluate simulation/world tasks for buyer and seller agents.
+
+```python
+def evaluate_task_world(self, task: str, result: str) -> None
+```
+
+<ParamField path="task" type="str" required>
+  The simulation task description
+</ParamField>
+
+<ParamField path="result" type="str" required>
+  The simulation results
+</ParamField>
+
+**Metrics Updated:** `task_evaluation["buyer"]` and `task_evaluation["seller"]` with:
+- `effectiveness_of_strategies`
+- `progress_and_outcome`
+- `interaction_dynamics`
+
+**Example:**
+
+```python
+task = "Negotiate optimal price for goods"
+result = "Buyer acquired goods at 15% discount, seller maintained margin"
+
+evaluator.evaluate_task_world(task, result)
+print(evaluator.metrics["task_evaluation"]["buyer"])
+# Output: {'effectiveness_of_strategies': 4, 'progress_and_outcome': 5, 'interaction_dynamics': 4}
+```
+
+### `evaluate_task_db()`
+
+Evaluate database root cause analysis tasks.
+
+```python
+def evaluate_task_db(self, task: str, result: str, labels: List[str], 
+                     pred_num: int, root_causes: List[str]) -> None
+```
+
+<ParamField path="task" type="str" required>
+  The database task description
+</ParamField>
+
+<ParamField path="result" type="str" required>
+  The root cause analysis result
+</ParamField>
+
+<ParamField path="labels" type="List[str]" required>
+  Ground truth labels
+</ParamField>
+
+<ParamField path="pred_num" type="int" required>
+  Number of predicted causes
+</ParamField>
+
+<ParamField path="root_causes" type="List[str]" required>
+  Identified root causes
+</ParamField>
+
+**Example:**
+
+```python
+evaluator.evaluate_task_db(
+    task="Identify database performance bottleneck",
+    result="Inefficient index causing slow queries",
+    labels=["index", "query_optimization"],
+    pred_num=1,
+    root_causes=["index"]
+)
+```
+
+### `evaluate_code_quality()`
+
+Evaluate generated code quality across multiple dimensions.
+
+```python
+def evaluate_code_quality(self, task: str, code_result: str) -> None
+```
+
+<ParamField path="task" type="str" required>
+  The coding task description
+</ParamField>
+
+<ParamField path="code_result" type="str" required>
+  The generated code
+</ParamField>
+
+**Metrics Updated:** `code_quality` with scores (1-5) for:
+- `instruction_following`: Adherence to requirements
+- `executability`: Syntactic correctness and runnability
+- `consistency`: Variable naming and formatting
+- `quality`: Documentation and modularity
+
+**Example:**
+
+```python
+task = "Implement binary search function"
+code_result = """
+def binary_search(arr, target):
+    '''Binary search implementation'''
+    left, right = 0, len(arr) - 1
+    while left <= right:
+        mid = (left + right) // 2
+        if arr[mid] == target:
+            return mid
+        elif arr[mid] < target:
+            left = mid + 1
+        else:
+            right = mid - 1
+    return -1
+"""
+
+evaluator.evaluate_code_quality(task, code_result)
+print(evaluator.metrics["code_quality"])
+# Output: {
+#     'instruction_following': 5,
+#     'executability': 5,
+#     'consistency': 4,
+#     'quality': 4
+# }
+```
+
+## Helper Methods
+
+### `parse_score()`
+
+Parse numeric scores from LLM responses.
+
+```python
+def parse_score(self, assistant_answer: str) -> int
+```
+
+<ParamField path="assistant_answer" type="str" required>
+  LLM response containing a score
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Parsed score (1-5), or 3 as default if parsing fails
+</ResponseField>
+
+### `parse_milestones()`
+
+Parse milestone information from LLM responses.
+
+```python
+def parse_milestones(self, assistant_answer: str) -> List[Dict[str, Any]]
+```
+
+<ParamField path="assistant_answer" type="str" required>
+  LLM response containing milestone data in JSON format
+</ParamField>
+
+<ResponseField name="return" type="List[Dict[str, Any]]">
+  List of milestone dictionaries, or empty list if parsing fails
+</ResponseField>
+
+### `parse_research_ratings()`
+
+Parse research evaluation ratings from LLM responses.
+
+```python
+def parse_research_ratings(self, assistant_answer: str) -> Dict[str, int]
+```
+
+<ParamField path="assistant_answer" type="str" required>
+  LLM response containing research ratings
+</ParamField>
+
+<ResponseField name="return" type="Dict[str, int]">
+  Dictionary of rating dimensions and scores
+</ResponseField>
+
+## Complete Example: Full Evaluation Pipeline
+
+```python
+from marble.engine import Engine
+from marble.evaluator import Evaluator
+from marble.environments import BaseEnvironment
+
+# Initialize evaluator
+metrics_config = {
+    "evaluate_llm": {
+        "model": "gpt-4"
+    }
+}
+evaluator = Evaluator(metrics_config=metrics_config)
+
+# Simulation loop
+for iteration in range(10):
+    # Agents perform actions
+    for agent in agents:
+        agent.step()
+    
+    # Update basic metrics
+    evaluator.update(environment, agents)
+    
+    # Evaluate communication (every 2 iterations)
+    if iteration % 2 == 0:
+        communications = get_agent_communications()
+        evaluator.evaluate_communication(
+            task=current_task,
+            communications=communications
+        )
+    
+    # Evaluate planning
+    if iteration > 0:
+        evaluator.evaluate_planning(
+            summary=last_round_summary,
+            agent_profiles=get_profiles(),
+            agent_tasks=get_tasks(),
+            results=current_results
+        )
+
+# Evaluate final outcomes
+evaluator.evaluate_kpi(
+    task=main_task,
+    agent_results=final_results
+)
+
+# Finalize and get metrics
+evaluator.finalize()
+metrics = evaluator.get_metrics()
+
+print("\nFinal Evaluation:")
+print(f"Success Rate: {metrics['success_rate']:.2%}")
+print(f"Total Tokens: {metrics['total_tokens']}")
+print(f"Avg Communication Score: {sum(evaluator.metrics['communication_score']) / len(evaluator.metrics['communication_score']):.1f}")
+print(f"Total Milestones: {evaluator.metrics['total_milestones']}")
+print(f"Agent KPIs: {evaluator.metrics['agent_kpis']}")
+```
+
+## Configuration in MARBLE
+
+Specify evaluator configuration in your YAML config:
+
+```yaml
+metrics:
+  evaluate_llm:
+    model: "gpt-4"  # or "gpt-3.5-turbo"
+  
+# The evaluator is automatically initialized in the Engine
+```
+
+## See Also
+
+- [Engine](/api/engine) - Main execution engine that uses the Evaluator
+- [BaseEnvironment](/api/environment) - Environment class with `is_task_completed()` method
+- [BaseAgent](/api/agent) - Agent class with `get_token_usage()` method

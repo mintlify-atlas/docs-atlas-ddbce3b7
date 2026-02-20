@@ -1,0 +1,587 @@
+---
+title: 'BaseAgent'
+description: 'Base class for all MARBLE agents with reasoning strategies, memory management, and inter-agent communication'
+---
+
+## Overview
+
+The `BaseAgent` class serves as the foundation for all agents in the MARBLE framework. It provides core functionality for perception, action execution, memory management, inter-agent communication, and reasoning strategies.
+
+**Source**: `marble/agent/base_agent.py`
+
+## Class Definition
+
+```python
+class BaseAgent:
+    """
+    Base class for all agents.
+    """
+```
+
+## Constructor
+
+### `__init__`
+
+```python
+def __init__(
+    self,
+    config: Dict[str, Union[Any, Dict[str, Any]]],
+    env: EnvType,
+    shared_memory: Union[SharedMemory, None] = None,
+    model: str = "gpt-3.5-turbo",
+)
+```
+
+Initialize the agent with configuration, environment, and optional shared memory.
+
+<ParamField path="config" type="Dict[str, Union[Any, Dict[str, Any]]]" required>
+  Configuration dictionary for the agent. Must contain:
+  - `agent_id` (str): Unique identifier for the agent
+  - `profile` (str, optional): Agent's profile/persona description
+  - `strategy` (str, optional): Reasoning strategy - "default", "cot", "reflexion", or "react"
+</ParamField>
+
+<ParamField path="env" type="EnvType" required>
+  Environment instance for the agent. Can be `BaseEnvironment`, `WebEnvironment`, or `CodingEnvironment`.
+</ParamField>
+
+<ParamField path="shared_memory" type="Union[SharedMemory, None]" default="None">
+  Shared memory instance for inter-agent communication.
+</ParamField>
+
+<ParamField path="model" type="str" default="gpt-3.5-turbo">
+  LLM model identifier or configuration dictionary with `model` key.
+</ParamField>
+
+### Example
+
+```python
+from marble.agent import BaseAgent
+from marble.environments import BaseEnvironment
+
+config = {
+    "agent_id": "assistant_1",
+    "profile": "A helpful assistant focused on task completion",
+    "strategy": "cot"  # Chain-of-Thought reasoning
+}
+
+env = BaseEnvironment()
+agent = BaseAgent(
+    config=config,
+    env=env,
+    model="gpt-4"
+)
+```
+
+## Reasoning Strategies
+
+The `BaseAgent` supports multiple reasoning strategies that influence how agents process tasks:
+
+### Available Strategies
+
+<Tabs>
+  <Tab title="Default">
+    **Strategy**: `"default"`
+    
+    Standard task processing without additional reasoning prompts.
+    
+    ```python
+    config = {"agent_id": "agent_1", "strategy": "default"}
+    ```
+  </Tab>
+  
+  <Tab title="Chain-of-Thought (CoT)">
+    **Strategy**: `"cot"`
+    
+    Step-by-step reasoning through tasks:
+    1. What is the main objective?
+    2. What information and resources are available?
+    3. What approach would be most effective?
+    4. What specific actions should be taken?
+    
+    ```python
+    config = {"agent_id": "agent_1", "strategy": "cot"}
+    ```
+  </Tab>
+  
+  <Tab title="Reflexion">
+    **Strategy**: `"reflexion"`
+    
+    Reflective reasoning process:
+    1. Initial thoughts on the task
+    2. Analysis of available options
+    3. Potential challenges and solutions
+    4. Final approach decision
+    
+    ```python
+    config = {"agent_id": "agent_1", "strategy": "reflexion"}
+    ```
+  </Tab>
+  
+  <Tab title="ReAct">
+    **Strategy**: `"react"`
+    
+    Reasoning and Acting framework:
+    - **Observation**: What do I notice?
+    - **Thought**: What are my considerations?
+    - **Action**: What specific action should I take?
+    - **Result**: What do I expect to achieve?
+    
+    ```python
+    config = {"agent_id": "agent_1", "strategy": "react"}
+    ```
+  </Tab>
+</Tabs>
+
+## Core Methods
+
+### `perceive`
+
+```python
+def perceive(self, state: Any) -> Any
+```
+
+Agent perceives the environment state and extracts relevant information.
+
+<ParamField path="state" type="Any" required>
+  The current state of the environment, typically a dictionary containing `task_description`.
+</ParamField>
+
+<ResponseField name="perception" type="Any">
+  Processed perception data, typically the task description string.
+</ResponseField>
+
+**Source**: `marble/agent/base_agent.py:116`
+
+#### Example
+
+```python
+state = {"task_description": "Analyze the sales data"}
+perception = agent.perceive(state)
+print(perception)  # "Analyze the sales data"
+```
+
+---
+
+### `act`
+
+```python
+def act(self, task: str) -> Tuple[str, Optional[Dict]]
+```
+
+Agent decides on an action to take based on the task, using available tools and reasoning strategy.
+
+<ParamField path="task" type="str" required>
+  The task description to perform.
+</ParamField>
+
+<ResponseField name="output" type="str">
+  Combined result containing:
+  - Model's response/reasoning
+  - Function execution results (if any)
+</ResponseField>
+
+<ResponseField name="communication" type="Optional[Dict]">
+  Full chat history if communication session was initiated, otherwise `None`.
+</ResponseField>
+
+**Source**: `marble/agent/base_agent.py:128`
+
+#### Example
+
+```python
+task = "Calculate the sum of sales for Q1"
+output, communication = agent.act(task)
+print(output)
+# Result from the model: I'll calculate the Q1 sales sum...
+# Result from the function: {"sum": 125000}
+```
+
+---
+
+### `plan_task`
+
+```python
+def plan_task(self) -> Optional[str]
+```
+
+Plan the next task based on the agent's memory, task history, and profile.
+
+<ResponseField name="next_task" type="Optional[str]">
+  Description of the next task to perform, or `None` if no task is planned.
+</ResponseField>
+
+**Source**: `marble/agent/base_agent.py:602`
+
+#### Example
+
+```python
+next_task = agent.plan_task()
+print(next_task)
+# "Based on previous analysis, verify the data accuracy"
+```
+
+---
+
+### `get_token_usage`
+
+```python
+def get_token_usage(self) -> int
+```
+
+Get the total token usage by the agent across all interactions.
+
+<ResponseField name="token_count" type="int">
+  Total number of tokens used by the agent.
+</ResponseField>
+
+**Source**: `marble/agent/base_agent.py:310`
+
+#### Example
+
+```python
+tokens = agent.get_token_usage()
+print(f"Total tokens used: {tokens}")
+# Total tokens used: 2847
+```
+
+---
+
+### `get_profile`
+
+```python
+def get_profile(self) -> Union[str, Any]
+```
+
+Get the agent's profile/persona description.
+
+<ResponseField name="profile" type="Union[str, Any]">
+  The agent's profile string.
+</ResponseField>
+
+**Source**: `marble/agent/base_agent.py:383`
+
+#### Example
+
+```python
+profile = agent.get_profile()
+print(profile)
+# "A helpful assistant focused on task completion"
+```
+
+## Inter-Agent Communication
+
+### `send_message`
+
+```python
+def send_message(
+    self,
+    session_id: str,
+    target_agent: AgentType,
+    message: str
+) -> None
+```
+
+Send a message to another agent within a communication session.
+
+<ParamField path="session_id" type="str" required>
+  Unique identifier for the communication session.
+</ParamField>
+
+<ParamField path="target_agent" type="BaseAgent" required>
+  The agent to whom the message is being sent.
+</ParamField>
+
+<ParamField path="message" type="str" required>
+  The message content to send.
+</ParamField>
+
+**Source**: `marble/agent/base_agent.py:319`
+
+#### Example
+
+```python
+session_id = "session_123"
+agent.send_message(
+    session_id=session_id,
+    target_agent=other_agent,
+    message="Can you help with the data analysis?"
+)
+```
+
+---
+
+### `receive_message`
+
+```python
+def receive_message(
+    self,
+    session_id: str,
+    from_agent: AgentType,
+    message: str
+) -> None
+```
+
+Receive a message from another agent within a communication session.
+
+<ParamField path="session_id" type="str" required>
+  Unique identifier for the communication session.
+</ParamField>
+
+<ParamField path="from_agent" type="BaseAgent" required>
+  The agent sending the message.
+</ParamField>
+
+<ParamField path="message" type="str" required>
+  The received message content.
+</ParamField>
+
+**Source**: `marble/agent/base_agent.py:339`
+
+---
+
+### `seralize_message`
+
+```python
+def seralize_message(self, session_id: str = "") -> str
+```
+
+Serialize message history for a session or all sessions.
+
+<ParamField path="session_id" type="str" default="">
+  Session ID to serialize. If empty, serializes all sessions.
+</ParamField>
+
+<ResponseField name="serialized" type="str">
+  Formatted string of message history.
+</ResponseField>
+
+**Source**: `marble/agent/base_agent.py:357`
+
+#### Example
+
+```python
+history = agent.seralize_message(session_id="session_123")
+print(history)
+# In Session session_123
+# From agent_1 to agent_2: Can you help with analysis?
+# From agent_2 to agent_1: Sure, I'll review the data.
+```
+
+## Hierarchical Task Management
+
+### `plan_tasks_for_children`
+
+```python
+def plan_tasks_for_children(self, task: str) -> Dict[str, Any]
+```
+
+Plan and assign tasks to child agents based on their profiles.
+
+<ParamField path="task" type="str" required>
+  The overall task to decompose and assign.
+</ParamField>
+
+<ResponseField name="assignments" type="Dict[str, Any]">
+  Dictionary mapping child agent IDs to their assigned tasks.
+</ResponseField>
+
+**Source**: `marble/agent/base_agent.py:713`
+
+#### Example
+
+```python
+task = "Analyze sales data and create a report"
+assignments = agent.plan_tasks_for_children(task)
+print(assignments)
+# {
+#   "data_analyst": "Extract and analyze Q1 sales data",
+#   "report_writer": "Create summary report from analysis"
+# }
+```
+
+---
+
+### `summarize_results`
+
+```python
+def summarize_results(
+    self,
+    children_results: Dict[str, Any],
+    own_result: Any
+) -> Any
+```
+
+Summarize results from child agents and the agent's own results.
+
+<ParamField path="children_results" type="Dict[str, Any]" required>
+  Dictionary of results from child agents, keyed by agent ID.
+</ParamField>
+
+<ParamField path="own_result" type="Any" required>
+  The agent's own result to include in the summary.
+</ParamField>
+
+<ResponseField name="summary" type="Any">
+  Combined summary of all results.
+</ResponseField>
+
+**Source**: `marble/agent/base_agent.py:757`
+
+---
+
+### `plan_next_agent`
+
+```python
+def plan_next_agent(
+    self,
+    result: Any,
+    agent_profiles: Dict[str, Dict[str, Any]]
+) -> Tuple[Optional[str], Optional[str]]
+```
+
+Choose the next agent to delegate to based on results and agent profiles.
+
+<ParamField path="result" type="Any" required>
+  The result from the agent's action.
+</ParamField>
+
+<ParamField path="agent_profiles" type="Dict[str, Dict[str, Any]]" required>
+  Profiles of available agents, keyed by agent ID.
+</ParamField>
+
+<ResponseField name="next_agent_id" type="Optional[str]">
+  ID of the next agent to delegate to, or `None`.
+</ResponseField>
+
+<ResponseField name="planning_task" type="Optional[str]">
+  Task description for the next agent, or `None`.
+</ResponseField>
+
+**Source**: `marble/agent/base_agent.py:791`
+
+#### Example
+
+```python
+result = "Initial data analysis completed"
+agent_profiles = {
+    "visualizer": {"profile": "Creates data visualizations"},
+    "statistician": {"profile": "Performs statistical analysis"}
+}
+
+next_id, task = agent.plan_next_agent(result, agent_profiles)
+print(f"Next: {next_id}, Task: {task}")
+# Next: visualizer, Task: Create charts from the analyzed data
+```
+
+## Utility Methods
+
+### `set_agent_graph`
+
+```python
+def set_agent_graph(self, agent_graph: Any) -> None
+```
+
+Set the agent graph for managing agent relationships and communication.
+
+<ParamField path="agent_graph" type="Any" required>
+  The agent graph instance containing agent relationships.
+</ParamField>
+
+**Source**: `marble/agent/base_agent.py:113`
+
+## Attributes
+
+<ResponseField name="agent_id" type="str">
+  Unique identifier for the agent.
+</ResponseField>
+
+<ResponseField name="profile" type="str">
+  Agent's profile/persona description.
+</ResponseField>
+
+<ResponseField name="llm" type="str">
+  LLM model identifier being used.
+</ResponseField>
+
+<ResponseField name="env" type="EnvType">
+  Environment instance associated with the agent.
+</ResponseField>
+
+<ResponseField name="memory" type="BaseMemory">
+  Agent's private memory instance.
+</ResponseField>
+
+<ResponseField name="shared_memory" type="SharedMemory">
+  Shared memory for inter-agent communication.
+</ResponseField>
+
+<ResponseField name="strategy" type="str">
+  Current reasoning strategy: "default", "cot", "reflexion", or "react".
+</ResponseField>
+
+<ResponseField name="token_usage" type="int">
+  Total tokens used by the agent.
+</ResponseField>
+
+<ResponseField name="task_history" type="List[str]">
+  History of tasks performed by the agent.
+</ResponseField>
+
+<ResponseField name="relationships" type="Dict[str, str]">
+  Relationships with other agents.
+</ResponseField>
+
+<ResponseField name="children" type="List[BaseAgent]">
+  List of child agents in hierarchical structure.
+</ResponseField>
+
+<ResponseField name="parent" type="Optional[BaseAgent]">
+  Parent agent in hierarchical structure.
+</ResponseField>
+
+## Complete Example
+
+```python
+from marble.agent import BaseAgent
+from marble.environments import BaseEnvironment
+from marble.memory import SharedMemory
+
+# Create environment
+env = BaseEnvironment()
+
+# Configure agent with CoT reasoning
+config = {
+    "agent_id": "data_analyst",
+    "profile": "Specialized in data analysis and visualization",
+    "strategy": "cot"  # Use Chain-of-Thought reasoning
+}
+
+# Initialize agent
+agent = BaseAgent(
+    config=config,
+    env=env,
+    shared_memory=SharedMemory(),
+    model="gpt-4"
+)
+
+# Perceive state and act
+state = {"task_description": "Analyze Q1 sales trends"}
+perception = agent.perceive(state)
+output, communication = agent.act(perception)
+
+print(f"Agent: {agent.agent_id}")
+print(f"Profile: {agent.get_profile()}")
+print(f"Result: {output}")
+print(f"Tokens used: {agent.get_token_usage()}")
+
+# Plan next task based on history
+next_task = agent.plan_task()
+print(f"Next task: {next_task}")
+```
+
+## Related
+
+- [WerewolfAgent](/api/agents/werewolf-agent) - Specialized agent for Werewolf game
+- [Environments](/api/environments) - Environment types for agents
+- [Memory](/api/memory) - Memory management systems

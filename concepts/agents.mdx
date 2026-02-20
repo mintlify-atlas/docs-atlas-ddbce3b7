@@ -1,0 +1,404 @@
+---
+title: 'Agent System'
+description: 'Learn how agents perceive, reason, and act in MARBLE'
+icon: 'user-robot'
+---
+
+## Overview
+
+Agents are the core actors in MARBLE. Each agent is an autonomous entity that can perceive its environment, reason about tasks, communicate with other agents, and execute actions.
+
+## Agent Architecture
+
+```
+┌──────────────────────────────────────┐
+│             BaseAgent                │
+│                                      │
+│  ┌────────────────────────────────┐ │
+│  │         Profile & Config       │ │
+│  │  - agent_id                    │ │
+│  │  - profile (capabilities)      │ │
+│  │  - strategy (reasoning)        │ │
+│  └────────────────────────────────┘ │
+│                                      │
+│  ┌────────────────────────────────┐ │
+│  │          Memory System         │ │
+│  │  - Task history                │ │
+│  │  - Action results              │ │
+│  │  - Communication logs          │ │
+│  └────────────────────────────────┘ │
+│                                      │
+│  ┌────────────────────────────────┐ │
+│  │       Communication Layer      │ │
+│  │  - Message passing             │ │
+│  │  - Session management          │ │
+│  │  - Relationship tracking       │ │
+│  └────────────────────────────────┘ │
+│                                      │
+│  ┌────────────────────────────────┐ │
+│  │       Action Execution         │ │
+│  │  - Environment actions         │ │
+│  │  - Tool calling                │ │
+│  │  - Function execution          │ │
+│  └────────────────────────────────┘ │
+└──────────────────────────────────────┘
+```
+
+## BaseAgent Class
+
+The `BaseAgent` class provides the foundation for all agents in MARBLE:
+
+```python marble/agent/base_agent.py
+class BaseAgent:
+    """
+    Base class for all agents.
+    """
+    
+    def __init__(
+        self,
+        config: Dict[str, Union[Any, Dict[str, Any]]],
+        env: EnvType,
+        shared_memory: Union[SharedMemory, None] = None,
+        model: str = "gpt-3.5-turbo",
+    ):
+        self.agent_id: str = config.get("agent_id")
+        self.env: EnvType = env
+        self.profile = config.get("profile", "")
+        self.memory = BaseMemory()
+        self.shared_memory = SharedMemory()
+        self.relationships: Dict[str, str] = {}
+        self.task_history: List[str] = []
+        self.strategy = config.get("strategy", "default")
+```
+
+See [marble/agent/base_agent.py:30-111](/home/daytona/workspace/source/marble/agent/base_agent.py#L30-L111)
+
+## Core Agent Capabilities
+
+### 1. Perception
+
+Agents perceive the environment state and extract relevant information:
+
+```python
+def perceive(self, state: Any) -> Any:
+    """
+    Agent perceives the environment state.
+    
+    Args:
+        state (Any): The current state of the environment.
+    
+    Returns:
+        Any: Processed perception data.
+    """
+    return state.get("task_description", "")
+```
+
+See [marble/agent/base_agent.py:116-126](/home/daytona/workspace/source/marble/agent/base_agent.py#L116-L126)
+
+### 2. Action Execution
+
+The `act` method is the primary way agents interact with their environment:
+
+```python
+def act(self, task: str) -> Any:
+    """
+    Agent decides on an action to take.
+    
+    Args:
+        task (str): The task to perform.
+    
+    Returns:
+        Any: The action decided by the agent.
+    """
+    self.task_history.append(task)
+    
+    # Get available tools from environment
+    tools = [
+        self.env.action_handler_descriptions[name]
+        for name in self.env.action_handler_descriptions
+    ]
+    
+    # Get available agents for communication
+    available_agents = self._get_available_agents()
+    
+    # Apply reasoning strategy
+    reasoning_prompt = self.reasoning_prompts.get(self.strategy, "")
+    
+    # Construct action task
+    act_task = (
+        f"You are {self.agent_id}: {self.profile}\n"
+        f"{reasoning_prompt}\n"
+        f"This is your task: {task}\n"
+        f"These are your memory: {self.memory.get_memory_str()}\n"
+    )
+    
+    # Call LLM with tools
+    result = model_prompting(
+        llm_model=self.llm,
+        messages=[{"role": "user", "content": act_task}],
+        tools=tools,
+        tool_choice="auto",
+    )[0]
+```
+
+See [marble/agent/base_agent.py:128-294](/home/daytona/workspace/source/marble/agent/base_agent.py#L128-L294)
+
+<Note>
+  The `act` method integrates **reasoning**, **tool calling**, and **memory updates** in a single execution cycle. This makes agents both reactive and reflective.
+</Note>
+
+### 3. Task Planning
+
+Agents can autonomously plan their next task based on history and memory:
+
+```python
+def plan_task(self) -> Optional[str]:
+    """
+    Plan the next task based on the agent's memory, task history, 
+    and its profile/persona.
+    
+    Returns:
+        str: The next task description.
+    """
+    # Retrieve all memory entries
+    memory_str = self.memory.get_memory_str()
+    task_history_str = ", ".join(self.task_history)
+    persona = self.get_profile()
+    
+    # Use LLM to determine next task
+    next_task = model_prompting(
+        llm_model=self.llm,
+        messages=[{
+            "role": "user",
+            "content": f"Agent '{self.agent_id}' should prioritize tasks "
+                      f"that align with their role: {persona}. "
+                      f"Based on task history: {task_history_str}, "
+                      f"and memory: {memory_str}, "
+                      f"what should be the next task?",
+        }],
+    )[0].content
+    
+    return next_task
+```
+
+See [marble/agent/base_agent.py:602-645](/home/daytona/workspace/source/marble/agent/base_agent.py#L602-L645)
+
+## Reasoning Strategies
+
+Agents support multiple reasoning strategies that influence how they approach tasks:
+
+```python
+self.reasoning_prompts = {
+    "default": "",
+    "cot": (
+        "Think through this step by step:\n"
+        "1. What is the main objective of this task?\n"
+        "2. What information and resources do I have available?\n"
+        "3. What approach would be most effective?\n"
+        "4. What specific actions should I take?\n"
+    ),
+    "reflexion": (
+        "Follow the reflection process:\n"
+        "1. Initial thoughts on the task\n"
+        "2. Analysis of available options\n"
+        "3. Potential challenges and solutions\n"
+        "4. Final approach decision\n"
+    ),
+    "react": (
+        "Follow the ReAct framework:\n"
+        "Observation: What do I notice about this task?\n"
+        "Thought: What are my considerations?\n"
+        "Action: What specific action should I take?\n"
+        "Result: What do I expect to achieve?\n"
+    ),
+}
+```
+
+See [marble/agent/base_agent.py:88-111](/home/daytona/workspace/source/marble/agent/base_agent.py#L88-L111)
+
+<Info>
+  Different reasoning strategies are suited for different types of tasks:
+  - **Default**: Quick, direct responses
+  - **Chain-of-Thought (CoT)**: Complex reasoning problems
+  - **Reflexion**: Tasks requiring self-evaluation
+  - **ReAct**: Tasks needing iterative observation and action
+</Info>
+
+## Inter-Agent Communication
+
+Agents can communicate with each other through a session-based messaging system:
+
+### Message Passing
+
+```python
+def send_message(
+    self, session_id: str, target_agent: AgentType, message: str
+) -> None:
+    """Send a message to the target agent within the specified session."""
+    self.msg_box[session_id][target_agent.agent_id].append(
+        (self.FORWARD_TO, message)
+    )
+    target_agent.receive_message(session_id, self, message)
+
+def receive_message(
+    self, session_id: str, from_agent: AgentType, message: str
+) -> None:
+    """Receive a message from another agent within the specified session."""
+    self.session_id = session_id
+    self.msg_box[session_id][from_agent.agent_id].append(
+        (self.RECV_FROM, message)
+    )
+```
+
+See [marble/agent/base_agent.py:319-355](/home/daytona/workspace/source/marble/agent/base_agent.py#L319-L355)
+
+### Communication Sessions
+
+Multi-turn conversations are managed through sessions:
+
+```python
+def _handle_new_communication_session(
+    self,
+    target_agent_id: str,
+    message: str,
+    session_id: str,
+    task: str,
+    turns: int = 5,
+) -> Dict[str, Any]:
+    """
+    Start a communication session and manage multi-turn dialogue.
+    
+    Returns:
+        Dict containing:
+        - success: bool
+        - message: str
+        - full_chat_history: str
+        - session_id: str (summary)
+    """
+    # Initial message
+    initial_communication = self._handle_communicate_to(
+        target_agent_id, message, session_id
+    )
+    
+    # Multi-turn dialogue
+    for t in range(turns):
+        session_current_agent = agents[t % 2]
+        session_other_agent = agents[(t + 1) % 2]
+        
+        # Generate response using LLM
+        result = model_prompting(...)
+        
+        if "<end-of-session>" in message:
+            break
+    
+    # Summarize conversation
+    summary = model_prompting(...)
+    
+    return {
+        "success": True,
+        "full_chat_history": chat_history,
+        "session_id": summary
+    }
+```
+
+See [marble/agent/base_agent.py:392-548](/home/daytona/workspace/source/marble/agent/base_agent.py#L392-L548)
+
+## Hierarchical Task Delegation
+
+In tree coordination mode, parent agents can delegate tasks to children:
+
+```python
+def plan_tasks_for_children(self, task: str) -> Dict[str, Any]:
+    """
+    Plan tasks for children agents based on the given task 
+    and children's profiles.
+    """
+    children_profiles = {
+        child.agent_id: child.get_profile() for child in self.children
+    }
+    
+    prompt = (
+        f"You are agent '{self.agent_id}'. "
+        f"Based on the overall task:\n{task}\n\n"
+        f"And your children's profiles:\n"
+    )
+    
+    for child_id, profile in children_profiles.items():
+        prompt += f"- {child_id}: {profile}\n"
+    
+    prompt += "Assign specific tasks to your children in JSON format."
+    
+    response = model_prompting(
+        llm_model=self.llm,
+        messages=[{"role": "system", "content": prompt}],
+    )[0]
+    
+    tasks_for_children = json.loads(response.content)
+    return tasks_for_children
+```
+
+See [marble/agent/base_agent.py:713-755](/home/daytona/workspace/source/marble/agent/base_agent.py#L713-L755)
+
+## Agent Memory
+
+Each agent maintains local memory that stores:
+
+- **Action history**: Past actions and their results
+- **Function calls**: Tools used and their outcomes
+- **Communication**: Messages sent and received
+- **Observations**: Environment state changes
+
+```python
+# Update memory after action
+self.memory.update(
+    self.agent_id,
+    {
+        "type": "action_function_call",
+        "action_name": function_name,
+        "args": function_args,
+        "result": result_from_function,
+    },
+)
+```
+
+See [marble/agent/base_agent.py:267-275](/home/daytona/workspace/source/marble/agent/base_agent.py#L267-L275)
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Clear Profiles" icon="id-card">
+    Define specific, actionable agent profiles that describe capabilities and limitations
+  </Card>
+  
+  <Card title="Strategy Selection" icon="chess">
+    Choose reasoning strategies based on task complexity and requirements
+  </Card>
+  
+  <Card title="Memory Management" icon="brain">
+    Use appropriate memory types (short-term vs long-term) based on information needs
+  </Card>
+  
+  <Card title="Communication" icon="comments">
+    Design communication protocols that minimize redundant exchanges
+  </Card>
+</CardGroup>
+
+<Warning>
+  Agents operate with **bounded rationality** - they can only reason based on available memory and tools. Design your agent profiles and tool sets accordingly.
+</Warning>
+
+## Related Concepts
+
+<CardGroup cols={3}>
+  <Card title="Memory" icon="database" href="/concepts/memory">
+    Explore memory systems
+  </Card>
+  
+  <Card title="Environments" icon="globe" href="/concepts/environments">
+    Learn about agent contexts
+  </Card>
+  
+  <Card title="Engine" icon="gears" href="/concepts/engine">
+    Understand coordination
+  </Card>
+</CardGroup>

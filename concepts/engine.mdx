@@ -1,0 +1,592 @@
+---
+title: 'Engine Coordination'
+description: 'Learn how the Engine orchestrates multi-agent systems'
+icon: 'gears'
+---
+
+## Overview
+
+The Engine is the central orchestrator in MARBLE that coordinates agents, manages the simulation lifecycle, and implements different coordination strategies. It acts as the conductor of the multi-agent symphony.
+
+## Engine Components
+
+```
+┌──────────────────────────────────────────────────┐
+│                    Engine                        │
+│                                                  │
+│  ┌────────────────────────────────────────────┐ │
+│  │           EnginePlanner                    │ │
+│  │  - Task assignment strategies              │ │
+│  │  - Progress tracking                       │ │
+│  │  - Termination decisions                   │ │
+│  └────────────────────────────────────────────┘ │
+│                                                  │
+│  ┌────────────────────────────────────────────┐ │
+│  │           AgentGraph                       │ │
+│  │  - Agent network structure                 │ │
+│  │  - Relationship management                 │ │
+│  │  - Traversal strategies                    │ │
+│  └────────────────────────────────────────────┘ │
+│                                                  │
+│  ┌────────────────────────────────────────────┐ │
+│  │           Evaluator                        │ │
+│  │  - Performance metrics                     │ │
+│  │  - Communication scoring                   │ │
+│  │  - Task evaluation                         │ │
+│  └────────────────────────────────────────────┘ │
+│                                                  │
+│  ┌────────────────────────────────────────────┐ │
+│  │       Coordination Modes                   │ │
+│  │  star | graph | chain | tree               │ │
+│  └────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────┘
+```
+
+## Engine Initialization
+
+The Engine initializes all components during construction:
+
+```python marble/engine/engine.py
+def __init__(self, config: Config):
+    """
+    Initialize the Engine with the given configuration.
+    
+    Args:
+        config (Config): Configuration parameters.
+    """
+    self.logger = get_logger(self.__class__.__name__)
+    self.config = config
+    self.planning_method = config.engine_planner.get("planning_method", "naive")
+    
+    # Initialize Environment
+    self.environment = self._initialize_environment(config.environment)
+    
+    # Initialize Agents
+    self.agents = self._initialize_agents(config.agents)
+    
+    # Initialize AgentGraph
+    self.graph = AgentGraph(self.agents, config)
+    for agent in self.agents:
+        agent.set_agent_graph(self.graph)
+    
+    # Initialize Memory
+    self.memory = self._initialize_memory(config.memory)
+    
+    # Initialize Evaluator
+    self.evaluator = Evaluator(metrics_config=config.metrics)
+    
+    # Initialize EnginePlanner
+    self.planner = EnginePlanner(
+        agent_graph=self.graph,
+        memory=self.memory,
+        config=config.engine_planner,
+        task=self.task,
+        model=config.llm,
+    )
+    
+    self.max_iterations = config.environment.get("max_iterations", 10)
+    self.current_iteration = 0
+```
+
+See [marble/engine/engine.py:61-100](/home/daytona/workspace/source/marble/engine/engine.py#L61-L100)
+
+## EnginePlanner
+
+The EnginePlanner handles intelligent task assignment and progress tracking:
+
+### Task Assignment Strategies
+
+The planner supports four planning strategies:
+
+#### 1. Naive Planning (Default)
+
+Basic task assignment based on agent profiles:
+
+```python
+def assign_tasks(self, planning_method: str = "naive") -> Dict[str, Any]:
+    """Assign tasks to agents."""
+    if planning_method == "naive":
+        prompt = (
+            self.create_prompt() +
+            "\nBased on the above, assign the next task to each agent.\n"
+            "Provide assignments in JSON format:\n"
+            "{\n"
+            '  "tasks": {\n'
+            '    "agent1": "...", \n'
+            '    "agent2": "..." \n'
+            "  },\n"
+            '  "continue": true\n'
+            "}\n"
+        )
+        
+        response = model_prompting(
+            llm_model=self.model,
+            messages=[{"role": "system", "content": prompt}],
+        )
+        
+        assignment = json_parse(response[0].content)
+        return assignment
+```
+
+See [marble/engine/engine_planner.py:353-399](/home/daytona/workspace/source/marble/engine/engine_planner.py#L353-L399)
+
+#### 2. Chain-of-Thought (CoT)
+
+Step-by-step reasoning before assignment:
+
+```python
+elif planning_method == "cot":
+    prompt = base_prompt + (
+        "\nChain-of-Thought Instructions:\n"
+        "Before providing the final task assignments, "
+        "think through the process step by step.\n"
+        "Explain your reasoning process, taking into account "
+        "each agent's capabilities and relationships.\n"
+        "After your reasoning, provide your final output "
+        "in JSON format including:\n"
+        '  "tasks": { "agent1": "...", "agent2": "..." },\n'
+        '  "chain_of_thought": "Your reasoning process here",\n'
+        '  "continue": true\n'
+    )
+```
+
+See [marble/engine/engine_planner.py:315-351](/home/daytona/workspace/source/marble/engine/engine_planner.py#L315-L351)
+
+#### 3. Group Discussion
+
+Agents propose tasks, then planner synthesizes:
+
+```python
+elif planning_method == "group_discuss":
+    agent_profiles = self.agent_graph.get_agent_profiles()
+    agent_proposals = {}
+    
+    # Each agent proposes a subtask
+    for agent_id, profile in agent_profiles.items():
+        agent_prompt = (
+            f"You are agent {agent_id} with profile: {profile['profile']}\n"
+            f"Task: {self.task}\n"
+            f"Current Progress: {self.current_progress}\n\n"
+            "Propose your next subtask."
+        )
+        
+        response = model_prompting(...)
+        agent_proposals[agent_id] = response[0].content.strip()
+    
+    # Synthesize proposals into final plan
+    final_prompt = (
+        self.create_prompt() +
+        "\nGroup Discussion Synthesis:\n" +
+        proposals_text +
+        "\nSynthesize a final task assignment plan."
+    )
+```
+
+See [marble/engine/engine_planner.py:141-233](/home/daytona/workspace/source/marble/engine/engine_planner.py#L141-L233)
+
+#### 4. Cognitive Evolution
+
+Learns from previous iterations using memory:
+
+```python
+elif planning_method == "cognitive_evolve":
+    # Retrieve memory information
+    evolving_experiences = self.memory.retrieve("evolving_experiences")
+    expected_result = self.memory.retrieve("expected_result")
+    expected_progress = self.memory.retrieve("expected_progress")
+    
+    cognitive_prompt = (
+        self.create_prompt() +
+        f"\nPrevious experiences: {evolving_experiences}\n"
+        f"Expected result: {expected_result}\n"
+        f"Expected progress: {expected_progress}\n\n"
+        "Reflect on current progress and compare with expectations.\n"
+        "Propose improved task assignments.\n"
+        "Generate new 'expected_result', 'expected_progress', "
+        "and 'evolving_experiences'.\n"
+    )
+    
+    response = model_prompting(...)
+    assignment = json_parse(response[0].content)
+    
+    # Update memory
+    self.memory.update("expected_result", assignment.get("expected_result"))
+    self.memory.update("expected_progress", assignment.get("expected_progress"))
+    self.memory.update("evolving_experiences", assignment.get("evolving_experiences"))
+```
+
+See [marble/engine/engine_planner.py:236-312](/home/daytona/workspace/source/marble/engine/engine_planner.py#L236-L312)
+
+### Progress Tracking
+
+```python
+def update_progress(self, summary: str) -> None:
+    """
+    Update the current progress based on the agents' outputs.
+    
+    Args:
+        summary (str): Summary of the latest iteration.
+    """
+    self.current_progress += f"\n{summary}"
+    self.logger.debug(f"Updated progress: {self.current_progress}")
+```
+
+See [marble/engine/engine_planner.py:401-409](/home/daytona/workspace/source/marble/engine/engine_planner.py#L401-L409)
+
+### Termination Decision
+
+```python
+def decide_next_step(self, agents_results: List[Dict[str, Any]]) -> bool:
+    """
+    Decide whether to continue or terminate the simulation.
+    
+    Args:
+        agents_results (List[Dict[str, Any]]): Results from all agents.
+    
+    Returns:
+        bool: True to continue, False to terminate.
+    """
+    prompt = (
+        "Based on the following agents' results, "
+        "determine whether the overall task is completed.\n\n"
+        f"Task Description:\n{self.task}\n\n"
+        "Agents' Results:\n"
+    )
+    
+    for result in agents_results:
+        prompt += f"- {result}\n"[:500]
+    
+    prompt += (
+        "\nRespond with JSON: {'continue': true/false}\n"
+        "Analyze results and decide if task should continue."
+    )
+    
+    response = model_prompting(...)
+    decision = json_parse(response[0].content)
+    return decision.get("continue", False)
+```
+
+See [marble/engine/engine_planner.py:447-497](/home/daytona/workspace/source/marble/engine/engine_planner.py#L447-L497)
+
+## Coordination Modes
+
+The Engine implements four distinct coordination patterns:
+
+### Star Coordination (Centralized)
+
+```python
+def star_coordinate(self) -> None:
+    """
+    Centralized coordination mode.
+    Central planner assigns tasks to all agents.
+    """
+    while self.current_iteration < self.max_iterations:
+        # Planner assigns tasks
+        assignment = self.planner.assign_tasks(
+            planning_method=self.planning_method
+        )
+        tasks = assignment.get("tasks", {})
+        
+        # Execute tasks
+        agents_results = []
+        for agent_id, task in tasks.items():
+            agent = self.graph.get_agent(agent_id)
+            result, communication = agent.act(task)
+            agents_results.append({agent_id: result})
+        
+        # Update progress
+        summary = self._summarize_results(agents_results)
+        self.planner.update_progress(summary)
+        
+        # Evaluate
+        self.evaluator.evaluate_communication(self.task, communications)
+        self.evaluator.evaluate_planning(summary, ...)
+        
+        # Decide continuation
+        continue_simulation = self.planner.decide_next_step(agents_results)
+        if not continue_simulation:
+            break
+```
+
+See [marble/engine/engine.py:494-653](/home/daytona/workspace/source/marble/engine/engine.py#L494-L653)
+
+**Advantages**:
+- Centralized control and visibility
+- Optimal for coordinated parallel work
+- Easier debugging and monitoring
+
+**Use Cases**:
+- Research tasks with specialized roles
+- Parallel data processing
+- Coordinated analysis tasks
+
+### Graph Coordination (Decentralized)
+
+```python
+def graph_coordinate(self) -> None:
+    """
+    Graph-based coordination mode.
+    Agents autonomously plan and coordinate.
+    """
+    while self.current_iteration < self.max_iterations:
+        current_agents = self.graph.get_all_agents()
+        agents_results = []
+        
+        for agent in current_agents:
+            # Each agent plans its own task
+            task = agent.plan_task()
+            
+            # Agent acts on the planned task
+            result, communication = agent.act(task)
+            agents_results.append({agent.agent_id: result})
+        
+        # Summarize and evaluate
+        summary = self._summarize_results(agents_results)
+        summary_from_planner = self.planner.summarize_output(
+            summary, self.task, self.output_format
+        )
+        
+        # Decide continuation
+        continue_simulation = self.planner.decide_next_step(agents_results)
+        if not continue_simulation:
+            break
+```
+
+See [marble/engine/engine.py:200-492](/home/daytona/workspace/source/marble/engine/engine.py#L200-L492)
+
+**Advantages**:
+- Agent autonomy and self-organization
+- Peer-to-peer communication
+- Emergent behavior
+
+**Use Cases**:
+- Collaborative problem-solving
+- Distributed search tasks
+- Peer review and consensus
+
+### Chain Coordination (Sequential)
+
+```python
+def chain_coordinate(self) -> None:
+    """
+    Chain-based coordination mode.
+    Agents pass work sequentially.
+    """
+    current_agent = self._select_initial_agent()
+    task = self.task
+    
+    while current_agent and chain_length < max_chain_length:
+        # Agent executes task
+        result, communication = current_agent.act(task)
+        
+        # Get profiles of other agents
+        agent_profiles = self.graph.get_agent_profiles_linked(
+            current_agent.agent_id
+        )
+        
+        # Current agent chooses the next agent
+        next_agent_id, plan = current_agent.plan_next_agent(
+            result, agent_profiles
+        )
+        
+        # Move to next agent
+        current_agent = self.graph.get_agent(next_agent_id)
+        task = plan
+        chain_length += 1
+        
+        # Decide continuation
+        continue_simulation = self.planner.decide_next_step([{"root_agent": result}])
+        if not continue_simulation:
+            break
+```
+
+See [marble/engine/engine.py:655-813](/home/daytona/workspace/source/marble/engine/engine.py#L655-L813)
+
+**Advantages**:
+- Clear handoff between stages
+- Sequential refinement
+- Pipeline processing
+
+**Use Cases**:
+- Multi-stage workflows
+- Progressive refinement tasks
+- Assembly-line processing
+
+### Tree Coordination (Hierarchical)
+
+```python
+def tree_coordinate(self) -> None:
+    """
+    Tree-based coordination mode.
+    Hierarchical task decomposition.
+    """
+    root_agent = self.graph.get_root_agent()
+    
+    while self.current_iteration < self.max_iterations:
+        # Recursive execution from root
+        results, communication, tasks = self._execute_agent_task_recursive(
+            root_agent, self.task
+        )
+        
+        # Update progress
+        summary = self._summarize_results(results)
+        summary = self.planner.summarize_output(
+            summary, self.task, self.output_format
+        )
+        self.planner.update_progress(summary)
+
+def _execute_agent_task_recursive(self, agent: BaseAgent, task: str) -> Any:
+    """Recursively execute tasks starting from the given agent."""
+    if len(agent.children) > 0:
+        # Agent assigns tasks to children
+        tasks_for_children = agent.plan_tasks_for_children(task)
+        
+        children_results = []
+        for child in agent.children:
+            child_task = tasks_for_children.get(child.agent_id, "")
+            if child_task:
+                child_result, _, _ = self._execute_agent_task_recursive(
+                    child, child_task
+                )
+                children_results += child_result
+        
+        # Parent agent acts on children's results
+        task_for_parent = (
+            task +
+            "\nChildren's results: " + str(children_results) +
+            "\nContinue working on the original task."
+        )
+        own_result, communication = agent.act(task_for_parent)
+        
+        return (
+            [{"agent_id": agent.agent_id, "result": own_result}] + children_results,
+            communication,
+            tasks
+        )
+    else:
+        # Leaf agent directly acts
+        result, communication = agent.act(task)
+        return ([{"agent_id": agent.agent_id, "result": result}], communication, [])
+```
+
+See [marble/engine/engine.py:815-1013](/home/daytona/workspace/source/marble/engine/engine.py#L815-L1013)
+
+**Advantages**:
+- Natural task decomposition
+- Manager-worker patterns
+- Hierarchical control
+
+**Use Cases**:
+- Complex project management
+- Hierarchical planning
+- Divide-and-conquer problems
+
+## Evaluation Integration
+
+The Engine continuously evaluates multi-agent performance:
+
+```python
+# Evaluate communication
+if iteration_data["communications"]:
+    communications_str = self._format_communications(
+        iteration_data["communications"]
+    )
+    self.evaluator.evaluate_communication(self.task, communications_str)
+
+# Evaluate planning
+agent_profiles = self._get_agent_profiles()
+agent_tasks_str = self._format_agent_tasks(iteration_data["task_assignments"])
+results_str = self._format_results(iteration_data["task_results"])
+self.evaluator.evaluate_planning(
+    iteration_data["summary"],
+    agent_profiles,
+    agent_tasks_str,
+    results_str,
+)
+
+# Evaluate KPIs
+self.evaluator.evaluate_kpi(self.task, results_str)
+```
+
+See evaluation code throughout coordination methods.
+
+## Starting the Engine
+
+```python
+def start(self) -> None:
+    """
+    Start the engine to run the simulation.
+    """
+    self.logger.info("Engine starting simulation.")
+    
+    if isinstance(self.environment, MinecraftEnvironment):
+        self.environment.launch()
+    
+    if self.coordinate_mode == "star":
+        self.logger.info("Running in centralized coordination mode.")
+        self.star_coordinate()
+    elif self.coordinate_mode == "graph":
+        self.logger.info("Running in graph-based coordination mode.")
+        self.graph_coordinate()
+    elif self.coordinate_mode == "chain":
+        self.logger.info("Running in chain-based coordination mode.")
+        self.chain_coordinate()
+    elif self.coordinate_mode == "tree":
+        self.logger.info("Running in tree-based coordination mode.")
+        self.tree_coordinate()
+    else:
+        raise ValueError(f"Unsupported coordinate mode: {self.coordinate_mode}")
+    
+    if isinstance(self.environment, MinecraftEnvironment):
+        self.environment.finish()
+```
+
+See [marble/engine/engine.py:1034-1057](/home/daytona/workspace/source/marble/engine/engine.py#L1034-L1057)
+
+## Coordination Mode Selection Guide
+
+<CardGroup cols={2}>
+  <Card title="Star" icon="star">
+    **When to use**: Tasks with clear central planning, parallel independent subtasks, need for global optimization
+    
+    **Examples**: Research paper analysis, data processing pipelines
+  </Card>
+  
+  <Card title="Graph" icon="diagram-project">
+    **When to use**: Tasks requiring peer collaboration, emergent solutions, distributed knowledge
+    
+    **Examples**: Collaborative debugging, consensus building
+  </Card>
+  
+  <Card title="Chain" icon="link">
+    **When to use**: Sequential workflows, progressive refinement, clear handoffs
+    
+    **Examples**: Code → Review → Deploy, Draft → Edit → Publish
+  </Card>
+  
+  <Card title="Tree" icon="sitemap">
+    **When to use**: Hierarchical decomposition, manager-worker patterns, recursive tasks
+    
+    **Examples**: Project management, complex problem breakdown
+  </Card>
+</CardGroup>
+
+<Note>
+  Choose your coordination mode based on the **natural structure** of your task. Don't force a square peg into a round hole - if your task is inherently hierarchical, use tree mode!
+</Note>
+
+## Related Concepts
+
+<CardGroup cols={3}>
+  <Card title="Agents" icon="user-robot" href="/concepts/agents">
+    Learn about agent capabilities
+  </Card>
+  
+  <Card title="Evaluation" icon="chart-line" href="/concepts/evaluation">
+    Understand metrics
+  </Card>
+  
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    See the full system
+  </Card>
+</CardGroup>

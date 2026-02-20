@@ -1,97 +1,101 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Introduction to MARBLE"
+description: "Multi-Agent Coordination Backbone with LLM Engine - A modular framework for building and evaluating multi-agent systems"
 ---
 
-## Setting up
+## What is MARBLE?
 
-Get your documentation site up and running in minutes.
+**MARBLE** (Multi-Agent Coordination Backbone with LLM Engine) is a modular and extensible framework designed to facilitate the development, testing, and evaluation of multi-agent systems leveraging Large Language Models (LLMs). It provides a structured environment where agents can interact within various simulated environments, utilizing cognitive abilities and communication mechanisms to perform tasks collaboratively or competitively.
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+## Key Features
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Modular Design" icon="cubes">
+    Easily extend or replace components like agents, environments, and LLM integrations to fit your specific use case.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  
+  <Card title="Multi-Agent Support" icon="users">
+    Model complex interactions between multiple agents with hierarchical or cooperative execution modes.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  
+  <Card title="LLM Integration" icon="brain">
+    Interface with various LLM providers (OpenAI, Together AI, etc.) through a unified API powered by LiteLLM.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  
+  <Card title="Shared Memory" icon="database">
+    Implement shared memory mechanisms for agent communication and collaboration across tasks.
   </Card>
-</Columns>
+  
+  <Card title="Flexible Environments" icon="globe">
+    Support for different simulated environments including web-based tasks, coding challenges, research, and more.
+  </Card>
+  
+  <Card title="Metrics & Evaluation" icon="chart-line">
+    Built-in evaluation metrics to assess agent performance, collaboration effectiveness, and task completion.
+  </Card>
+</CardGroup>
 
-## Create beautiful pages
+## Architecture Overview
 
-Everything you need to create world-class documentation.
+MARBLE is built around several core components that work together to create powerful multi-agent systems:
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+### Core Components
 
-## Need inspiration?
+- **Agents**: Autonomous entities with profiles, strategies, and reasoning capabilities that can perform actions within environments
+- **Environments**: Simulated spaces where agents operate (Web, Coding, Research, Minecraft, Database, etc.)
+- **Engine**: Orchestrates agent interactions and manages execution flow
+- **Memory Systems**: Short-term and shared memory for agent communication and state management
+- **LLM Integration**: Unified interface for prompting various language models
+- **Agent Graph**: Defines relationships and coordination modes between agents
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Use Cases
+
+MARBLE excels at modeling complex multi-agent scenarios:
+
+- **Collaborative Software Development**: Multiple agents working together to design, implement, and optimize code
+- **Research Automation**: Agents collecting papers, analyzing content, and synthesizing findings
+- **Web Task Automation**: Coordinated web browsing and information gathering
+- **Database Diagnostics**: Multi-agent systems for detecting and resolving database anomalies
+- **Game Playing**: Agents competing or cooperating in game environments
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Set up MARBLE in your environment with Poetry and configure your API keys.
+  </Card>
+  
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Run your first multi-agent simulation in minutes with a simple example.
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Learn how to configure agents, environments, and coordination modes.
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/engine">
+    Explore the complete API documentation for all MARBLE components.
+  </Card>
+</CardGroup>
+
+## Research & Citation
+
+MARBLE is based on academic research in multi-agent systems. If you find MARBLE helpful in your work, please cite:
+
+```bibtex
+@misc{zhu2025multiagentbenchevaluatingcollaborationcompetition,
+      title={MultiAgentBench: Evaluating the Collaboration and Competition of LLM agents},
+      author={Kunlun Zhu and Hongyi Du and Zhaochen Hong and Xiaocheng Yang and Shuyi Guo and Zhe Wang and Zhenhailong Wang and Cheng Qian and Xiangru Tang and Heng Ji and Jiaxuan You},
+      year={2025},
+      eprint={2503.01935},
+      archivePrefix={arXiv},
+      primaryClass={cs.MA},
+      url={https://arxiv.org/abs/2503.01935}
+}
+```
+
+## Community & Support
+
+<Note>
+  MARBLE follows industrial coding standards with comprehensive type checking (mypy, beartype) and automated testing to ensure production-ready code quality.
+</Note>

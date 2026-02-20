@@ -1,0 +1,439 @@
+---
+title: 'BaseEnvironment'
+description: 'Base environment class for multi-agent simulations'
+---
+
+## Overview
+
+The `BaseEnvironment` class provides the foundational environment where agents operate and interact. It manages state, action handlers, and task completion logic. All specialized environments (WebEnvironment, CodingEnvironment, etc.) inherit from this base class.
+
+## Constructor
+
+### `__init__(name, config)`
+
+Initialize the environment with a name and configuration.
+
+<ParamField path="name" type="str" required>
+  The name identifier for the environment.
+</ParamField>
+
+<ParamField path="config" type="Dict[str, Any]" required>
+  Environment configuration dictionary containing:
+  - `description` (str): Description of the environment
+  - `task_description` (str): The main task description
+  - `ground_truth` (str): Expected result for task completion verification
+  - `max_iterations` (int): Maximum iterations before environment terminates (default: 10)
+</ParamField>
+
+<ResponseField name="environment" type="BaseEnvironment">
+  An initialized environment with:
+  - Empty agent list
+  - Initial state containing task description
+  - Action handlers registry
+  - Iteration tracking
+</ResponseField>
+
+```python Example
+from marble.environments import BaseEnvironment
+
+config = {
+    "description": "A collaborative problem-solving environment",
+    "task_description": "Solve the optimization problem",
+    "ground_truth": "optimal solution found",
+    "max_iterations": 15
+}
+
+env = BaseEnvironment(
+    name="Problem Solving Environment",
+    config=config
+)
+```
+
+## Action Management Methods
+
+### `register_action(action_name, handler, description)`
+
+Register an action handler that agents can use.
+
+<ParamField path="action_name" type="str" required>
+  The name identifier for the action.
+</ParamField>
+
+<ParamField path="handler" type="Callable[..., Dict[str, Any]]" required>
+  The handler function that executes the action. Must return a dictionary.
+</ParamField>
+
+<ParamField path="description" type="Dict[str, Any]" required>
+  Action description in OpenAI function calling format, used for LLM tool selection.
+</ParamField>
+
+```python Example
+def search_database(query: str, limit: int = 10) -> Dict[str, Any]:
+    """Search the database for relevant information."""
+    results = db.search(query, limit=limit)
+    return {
+        "success": True,
+        "results": results,
+        "count": len(results)
+    }
+
+# Define the OpenAI-format description
+search_description = {
+    "type": "function",
+    "function": {
+        "name": "search_database",
+        "description": "Search the database for information",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query string"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of results",
+                    "default": 10
+                }
+            },
+            "required": ["query"]
+        }
+    }
+}
+
+# Register the action
+env.register_action(
+    action_name="search_database",
+    handler=search_database,
+    description=search_description
+)
+```
+
+### `apply_action(agent_id, action_name, arguments)`
+
+Execute a registered action in the environment.
+
+<ParamField path="agent_id" type="Union[str, None]" required>
+  The ID of the agent performing the action. Can be None for system actions.
+</ParamField>
+
+<ParamField path="action_name" type="str" required>
+  The name of the action to execute (must be registered).
+</ParamField>
+
+<ParamField path="arguments" type="Dict[str, Any]" required>
+  Dictionary of arguments to pass to the action handler.
+</ParamField>
+
+<ResponseField name="result" type="Dict[str, Any]">
+  The result returned by the action handler. Also stored in environment state as `last_action_result`.
+</ResponseField>
+
+```python
+# Agent calls a registered action
+result = env.apply_action(
+    agent_id="agent_1",
+    action_name="search_database",
+    arguments={"query": "machine learning", "limit": 5}
+)
+
+print(f"Found {result['count']} results")
+print(f"Success: {result['success']}")
+```
+
+<Warning>
+  Each `apply_action()` call increments the iteration counter. When `current_iteration` reaches `max_iterations`, the environment's `done` flag is set to True.
+</Warning>
+
+## State Management Methods
+
+### `get_state()`
+
+Get a copy of the current environment state.
+
+<ResponseField name="state" type="Dict[str, Any]">
+  A copy of the current state dictionary containing:
+  - `task_description`: The main task
+  - `last_action_result`: Result of the most recent action
+  - Any additional state data added during execution
+</ResponseField>
+
+```python
+state = env.get_state()
+print(f"Current task: {state['task_description']}")
+print(f"Last result: {state.get('last_action_result')}")
+```
+
+### `get_description()`
+
+Get the environment's description.
+
+<ResponseField name="description" type="str">
+  The description string set during initialization.
+</ResponseField>
+
+```python
+description = env.get_description()
+print(f"Environment: {description}")
+```
+
+## Task Completion Methods
+
+### `is_done()`
+
+Check if the environment has reached a terminal state.
+
+<ResponseField name="done" type="bool">
+  True if environment should terminate (max iterations reached), False otherwise.
+</ResponseField>
+
+```python
+while not env.is_done():
+    # Execute agent actions
+    result = agent.act(task)
+    env.apply_action(agent.agent_id, "some_action", {})
+```
+
+### `is_task_completed()`
+
+Check if the task has been completed successfully.
+
+<ResponseField name="completed" type="bool">
+  True if last action result matches ground truth, False otherwise.
+</ResponseField>
+
+```python
+if env.is_task_completed():
+    print("Task successfully completed!")
+else:
+    print("Task not yet complete, continuing...")
+```
+
+<Expandable title="How Task Completion Works">
+  The environment compares the `last_action_result` from the state to the `ground_truth` set in the configuration. Comparison is case-insensitive and strips whitespace:
+  
+  ```python
+  result.strip().lower() == ground_truth.strip().lower()
+  ```
+  
+  Override `_compare_to_ground_truth()` in subclasses for custom comparison logic.
+</Expandable>
+
+## Properties
+
+<ParamField path="name" type="str">
+  The name of the environment.
+</ParamField>
+
+<ParamField path="agents" type="List[Any]">
+  List of agents registered in the environment.
+</ParamField>
+
+<ParamField path="state" type="Dict[str, Any]">
+  Current state dictionary of the environment.
+</ParamField>
+
+<ParamField path="action_handler_descriptions" type="Dict[str, Any]">
+  Dictionary mapping action names to their OpenAI-format descriptions (available to LLMs).
+</ParamField>
+
+<ParamField path="done" type="bool">
+  Flag indicating if environment has reached terminal state.
+</ParamField>
+
+<ParamField path="description" type="str">
+  Text description of the environment.
+</ParamField>
+
+<ParamField path="task_description" type="str">
+  Description of the task to be completed.
+</ParamField>
+
+<ParamField path="ground_truth" type="str">
+  Expected result for task completion verification.
+</ParamField>
+
+<ParamField path="max_iterations" type="int">
+  Maximum number of action iterations allowed.
+</ParamField>
+
+<ParamField path="current_iteration" type="int">
+  Current iteration count.
+</ParamField>
+
+## Complete Example
+
+```python
+from marble.environments import BaseEnvironment
+from marble.agent import BaseAgent
+from typing import Dict, Any
+
+# Define custom action handlers
+def analyze_data(data: str) -> Dict[str, Any]:
+    """Analyze the provided data."""
+    # Perform analysis
+    insights = perform_analysis(data)
+    return {
+        "success": True,
+        "insights": insights,
+        "confidence": 0.92
+    }
+
+def generate_report(insights: list) -> Dict[str, Any]:
+    """Generate a report from insights."""
+    report = create_report(insights)
+    return {
+        "success": True,
+        "report": report
+    }
+
+# Initialize environment
+config = {
+    "description": "Data analysis environment",
+    "task_description": "Analyze customer feedback and generate insights",
+    "ground_truth": "report generated",
+    "max_iterations": 20
+}
+
+env = BaseEnvironment(name="Analysis Env", config=config)
+
+# Register actions
+env.register_action(
+    action_name="analyze_data",
+    handler=analyze_data,
+    description={
+        "type": "function",
+        "function": {
+            "name": "analyze_data",
+            "description": "Analyze provided data and extract insights",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "string",
+                        "description": "Data to analyze"
+                    }
+                },
+                "required": ["data"]
+            }
+        }
+    }
+)
+
+env.register_action(
+    action_name="generate_report",
+    handler=generate_report,
+    description={
+        "type": "function",
+        "function": {
+            "name": "generate_report",
+            "description": "Generate report from insights",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "insights": {
+                        "type": "array",
+                        "description": "List of insights to include"
+                    }
+                },
+                "required": ["insights"]
+            }
+        }
+    }
+)
+
+# Create and configure agent
+agent = BaseAgent(
+    config={"agent_id": "analyst", "profile": "Data analyst"},
+    env=env,
+    model="gpt-4"
+)
+
+# Run simulation
+while not env.is_done() and not env.is_task_completed():
+    state = env.get_state()
+    task = state["task_description"]
+    
+    # Agent acts on the task
+    output, _ = agent.act(task)
+    
+    print(f"Iteration {env.current_iteration}")
+    print(f"Agent output: {output[:100]}...")
+    
+    if env.is_task_completed():
+        print("\nTask completed successfully!")
+        break
+
+print(f"\nFinal state: {env.get_state()}")
+print(f"Total iterations: {env.current_iteration}")
+```
+
+## Extending BaseEnvironment
+
+Create custom environments by subclassing BaseEnvironment:
+
+```python
+from marble.environments import BaseEnvironment
+from typing import Dict, Any
+
+class CustomEnvironment(BaseEnvironment):
+    def __init__(self, name: str, config: Dict[str, Any]):
+        super().__init__(name, config)
+        
+        # Add custom initialization
+        self.custom_state = {}
+        
+        # Register custom actions
+        self._register_custom_actions()
+    
+    def _register_custom_actions(self):
+        """Register environment-specific actions."""
+        self.register_action(
+            action_name="custom_action",
+            handler=self._handle_custom_action,
+            description={
+                "type": "function",
+                "function": {
+                    "name": "custom_action",
+                    "description": "Perform custom action",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "param": {"type": "string"}
+                        },
+                        "required": ["param"]
+                    }
+                }
+            }
+        )
+    
+    def _handle_custom_action(self, param: str) -> Dict[str, Any]:
+        """Custom action handler."""
+        result = self._process_param(param)
+        return {"success": True, "result": result}
+    
+    def _compare_to_ground_truth(self, result: str, ground_truth: str) -> bool:
+        """Override with custom comparison logic."""
+        # Custom comparison logic
+        return custom_compare(result, ground_truth)
+
+# Use the custom environment
+custom_env = CustomEnvironment(
+    name="Custom Env",
+    config={"description": "Custom environment", "max_iterations": 10}
+)
+```
+
+## Notes
+
+<Note>
+  Action handlers must return a dictionary (`Dict[str, Any]`). This is the expected format for all environment actions.
+</Note>
+
+<Note>
+  The state dictionary is mutable. Agents can modify state through actions, but should use registered action handlers rather than direct state manipulation.
+</Note>
+
+<Warning>
+  The `ground_truth` comparison is case-insensitive and strips whitespace. Ensure your ground truth strings match this behavior or override `_compare_to_ground_truth()` for custom logic.
+</Warning>

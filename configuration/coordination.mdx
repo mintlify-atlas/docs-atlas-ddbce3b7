@@ -1,0 +1,548 @@
+---
+title: Coordination Modes
+description: Configure agent collaboration patterns and relationship structures
+---
+
+Coordination modes define how agents interact, communicate, and collaborate to accomplish tasks. MARBLE supports four coordination patterns, each suited for different task types and team structures.
+
+## Coordination Mode Configuration
+
+<ParamField path="coordinate_mode" type="string" required>
+  The coordination pattern for agent interaction:
+  - `graph`: Network collaboration with bidirectional relationships
+  - `star`: Centralized coordination with a hub agent
+  - `chain`: Sequential processing pipeline
+  - `tree`: Hierarchical parent-child structure
+</ParamField>
+
+<ParamField path="relationships" type="array" required>
+  Array of agent relationships in format `[agent1_id, agent2_id, "relationship_type"]`.
+  
+  **Relationship types**:
+  - `"collaborates with"`: Peer collaboration (graph mode)
+  - `"reports_to"`: Hierarchical reporting (star mode)
+  - `"parent"`: Parent-child relationship (tree mode)
+  - Custom types: `"manages"`, `"supports"`, `"supervises"`
+</ParamField>
+
+## Graph Mode
+
+Peer-to-peer collaboration where agents work together in a network with bidirectional relationships.
+
+### Configuration
+
+```yaml
+coordinate_mode: graph
+
+relationships:
+  - [agent1, agent2, "collaborates with"]
+  - [agent2, agent1, "collaborates with"]
+  - [agent1, agent3, "collaborates with"]
+  - [agent3, agent1, "collaborates with"]
+  - [agent2, agent3, "collaborates with"]
+  - [agent3, agent2, "collaborates with"]
+```
+
+### Characteristics
+
+- **Bidirectional communication**: Agents can communicate in both directions
+- **Distributed decision-making**: No central authority
+- **Parallel execution**: Agents can work simultaneously
+- **Flexible collaboration**: Dynamic team formation
+
+### When to Use
+
+- Software development teams with equal expertise
+- Research collaboration with peer review
+- Problem-solving requiring diverse perspectives
+- Tasks needing flexible, adaptive coordination
+
+### Complete Example
+
+```yaml
+coordinate_mode: graph
+
+relationships:
+  - [agent1, agent2, "collaborates with"]
+  - [agent2, agent1, "collaborates with"]
+  - [agent1, agent3, "collaborates with"]
+  - [agent3, agent1, "collaborates with"]
+  - [agent2, agent3, "collaborates with"]
+  - [agent3, agent2, "collaborates with"]
+
+llm: "together_ai/meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+
+environment:
+  type: Coding
+  name: "Coding Environment"
+  workspace_dir: "workspace"
+  max_iterations: 5
+
+task:
+  content: |
+    Develop a multiplayer game with collaborative puzzle-solving mechanics.
+    Each developer should contribute their expertise:
+    - Game engine and core mechanics
+    - User interface and graphics
+    - Networking and multiplayer logic
+
+agents:
+  - type: CodingAgent
+    agent_id: agent1
+    profile: |
+      I am a game engine developer. I create core game mechanics and physics.
+      I collaborate with UI and networking developers.
+
+  - type: CodingAgent
+    agent_id: agent2
+    profile: |
+      I am a UI developer. I design user interfaces and graphics.
+      I collaborate with game engine and networking developers.
+
+  - type: CodingAgent
+    agent_id: agent3
+    profile: |
+      I am a networking developer. I implement multiplayer functionality.
+      I collaborate with game engine and UI developers.
+
+memory:
+  type: SharedMemory
+
+metrics:
+  evaluate_llm: "gpt-4o-mini"
+  code_quality: true
+  collaboration_effectiveness: true
+
+engine_planner:
+  initial_progress: "Starting collaborative development."
+```
+
+## Star Mode (Centralized)
+
+Centralized coordination with a hub agent managing and delegating to worker agents.
+
+### Configuration
+
+```yaml
+coordinate_mode: star
+
+relationships:
+  - [agent2, agent1, "reports_to"]
+  - [agent3, agent1, "reports_to"]
+  - [agent4, agent1, "reports_to"]
+```
+
+### Characteristics
+
+- **Central coordinator**: One agent manages all others
+- **Hub-and-spoke structure**: All communication goes through the hub
+- **Delegated execution**: Hub assigns tasks to workers
+- **Centralized decision-making**: Hub synthesizes results
+
+### When to Use
+
+- Clear leadership hierarchy
+- Task decomposition and delegation
+- Centralized quality control
+- Coordination of specialized workers
+
+### Complete Example
+
+```yaml
+coordinate_mode: star
+
+relationships:
+  - [agent2, agent1, "reports_to"]
+  - [agent3, agent1, "reports_to"]
+  - [agent4, agent1, "reports_to"]
+
+environment:
+  type: Web
+  name: "Web Simulation Environment"
+  max_iterations: 5
+
+task:
+  content: "Find news about the latest trends in AI and share them."
+
+agents:
+  - type: BaseAgent
+    agent_id: agent1
+    profile: |
+      You are a helpful and supportive team leader.
+      You coordinate research efforts and synthesize findings.
+      You do not use the internet directly.
+      You must ask other agents for information.
+
+  - type: BaseAgent
+    agent_id: agent2
+    profile: |
+      You are a curious team member.
+      You use Google to search for AI trends.
+      You report findings to agent1.
+
+  - type: BaseAgent
+    agent_id: agent3
+    profile: |
+      You are a diligent team member.
+      You use Wikipedia to research AI topics.
+      You report findings to agent1.
+
+  - type: BaseAgent
+    agent_id: agent4
+    profile: |
+      You are a creative team member.
+      You use Twitter to track trending AI discussions.
+      You report findings to agent1.
+
+memory:
+  type: SharedMemory
+
+engine_planner:
+  initial_progress: "Starting coordinated research."
+```
+
+## Chain Mode
+
+Sequential processing where agents work one after another in a pipeline.
+
+### Configuration
+
+```yaml
+coordinate_mode: chain
+
+relationships:
+  - [agent1, agent2, "reports_to"]
+  - [agent1, agent3, "manages"]
+  - [agent2, agent4, "supports"]
+  - [agent3, agent4, "collaborates_with"]
+```
+
+### Characteristics
+
+- **Sequential execution**: Agents process in order
+- **Pipeline processing**: Output of one agent becomes input for the next
+- **Staged refinement**: Progressive improvement through stages
+- **Clear workflow**: Defined processing stages
+
+### When to Use
+
+- Multi-stage processing pipelines
+- Progressive refinement workflows
+- Tasks with clear sequential dependencies
+- Quality improvement through iterations
+
+### Complete Example
+
+```yaml
+coordinate_mode: chain
+
+relationships:
+  - [agent1, agent2, "reports_to"]
+  - [agent1, agent3, "manages"]
+
+environment:
+  type: Base
+  name: "Discussion Environment"
+  max_iterations: 5
+
+task:
+  content: |
+    Research and summarize the impact of AI on healthcare.
+    
+    Process:
+    1. Agent1: Find initial information
+    2. Agent2: Analyze and expand on findings
+    3. Agent3: Create final summary
+
+agents:
+  - type: BaseAgent
+    agent_id: agent1
+    profile: |
+      You are a helpful team leader who initiates research.
+      You search for information about AI in healthcare.
+
+  - type: BaseAgent
+    agent_id: agent2
+    profile: |
+      You are an analyst who expands on initial findings.
+      You analyze information provided by agent1.
+
+  - type: BaseAgent
+    agent_id: agent3
+    profile: |
+      You are a writer who creates final summaries.
+      You synthesize analyses from agent2 into clear documentation.
+
+memory:
+  type: SharedMemory
+
+engine_planner:
+  initial_progress: "Starting sequential processing."
+```
+
+## Tree Mode
+
+Hierarchical structure with parent-child relationships for nested task decomposition.
+
+### Configuration
+
+```yaml
+coordinate_mode: tree
+
+relationships:
+  - [agent1, agent2, "parent"]
+  - [agent1, agent3, "parent"]
+  - [agent2, agent4, "parent"]
+  - [agent3, agent5, "parent"]
+```
+
+### Characteristics
+
+- **Hierarchical structure**: Clear parent-child relationships
+- **Recursive task decomposition**: Parents delegate to children
+- **Bottom-up aggregation**: Children report results to parents
+- **Nested collaboration**: Subtask teams within larger teams
+
+### When to Use
+
+- Complex task decomposition
+- Hierarchical organization structures
+- Nested subtask management
+- Multi-level decision-making
+
+### Complete Example
+
+```yaml
+coordinate_mode: tree
+
+relationships:
+  - [agent1, agent2, "parent"]
+  - [agent1, agent3, "parent"]
+  - [agent2, agent4, "parent"]
+  - [agent3, agent5, "parent"]
+
+llm: "gpt-3.5-turbo"
+
+environment:
+  type: Base
+  name: "Discussion Simulation Environment"
+  max_iterations: 1
+
+task:
+  content: "Discuss the potential impact of AI on various industries."
+
+agents:
+  - type: BaseAgent
+    agent_id: agent1
+    strategy: cot
+    profile: |
+      You are an AI researcher with strategic and forward-thinking mindset.
+      Your expertise lies in AI ethics and policy.
+      You coordinate high-level analysis.
+
+  - type: BaseAgent
+    agent_id: agent2
+    strategy: cot
+    profile: |
+      You are a software developer specializing in AI applications in healthcare.
+      You are practical and focused on immediate applications.
+      You manage healthcare-specific analysis.
+
+  - type: BaseAgent
+    agent_id: agent3
+    strategy: cot
+    profile: |
+      You are an economist interested in long-term effects of AI on labor markets.
+      You are analytical and cautious about societal impacts.
+      You manage economic analysis.
+
+  - type: BaseAgent
+    agent_id: agent4
+    strategy: cot
+    profile: |
+      You are a creative designer working with AI for art and media.
+      You are optimistic about AI transforming creative processes.
+      You analyze creative industry impacts.
+
+  - type: BaseAgent
+    agent_id: agent5
+    strategy: cot
+    profile: |
+      You are a business analyst specializing in financial sector.
+      You analyze how AI affects financial markets and investment strategies.
+
+memory:
+  type: SharedMemory
+
+metrics:
+  evaluate_llm:
+    provider: "openai"
+    model: "gpt-3.5-turbo"
+  engagement_level: true
+  relevance: true
+  diversity_of_perspectives: true
+
+engine_planner:
+  initial_progress: "Starting hierarchical discussion on AI's impact."
+
+output:
+  file_path: "result/discussion_output.jsonl"
+```
+
+## Relationship Types
+
+Relationships define how agents interact based on coordination mode:
+
+| Relationship Type | Coordination Mode | Description |
+|------------------|------------------|-------------|
+| `"collaborates with"` | Graph | Bidirectional peer collaboration |
+| `"reports_to"` | Star | Worker reports to hub |
+| `"parent"` | Tree | Parent-child hierarchy |
+| `"manages"` | Star, Chain | Management relationship |
+| `"supports"` | Chain, Graph | Support relationship |
+| `"supervises"` | Tree, Star | Supervisory relationship |
+
+## Communication Patterns
+
+### Graph Mode Communication
+
+```
+Agent1 <--> Agent2
+  ^  \      /  ^
+  |   \    /   |
+  |    v  v    |
+  +-> Agent3 <-+
+```
+
+All agents can communicate directly with connected peers.
+
+### Star Mode Communication
+
+```
+    Agent1 (Hub)
+    /  |  \
+   /   |   \
+  v    v    v
+Agent2 Agent3 Agent4
+```
+
+All communication flows through the hub agent.
+
+### Chain Mode Communication
+
+```
+Agent1 -> Agent2 -> Agent3 -> Agent4
+```
+
+Sequential communication along the chain.
+
+### Tree Mode Communication
+
+```
+      Agent1
+      /    \
+     v      v
+  Agent2  Agent3
+    |       |
+    v       v
+  Agent4  Agent5
+```
+
+Hierarchical communication from parents to children.
+
+## Choosing a Coordination Mode
+
+<CardGroup cols={2}>
+  <Card title="Graph Mode" icon="diagram-project">
+    **Best for:**
+    - Equal peer collaboration
+    - Flexible team dynamics
+    - Distributed expertise
+    
+    **Examples:**
+    - Software development teams
+    - Research collaborations
+    - Brainstorming sessions
+  </Card>
+  
+  <Card title="Star Mode" icon="star">
+    **Best for:**
+    - Clear leadership
+    - Task delegation
+    - Centralized control
+    
+    **Examples:**
+    - Project management
+    - Research coordination
+    - Quality assurance
+  </Card>
+  
+  <Card title="Chain Mode" icon="link">
+    **Best for:**
+    - Sequential processing
+    - Pipeline workflows
+    - Progressive refinement
+    
+    **Examples:**
+    - Data processing pipelines
+    - Document review workflows
+    - Multi-stage analysis
+  </Card>
+  
+  <Card title="Tree Mode" icon="sitemap">
+    **Best for:**
+    - Hierarchical structures
+    - Task decomposition
+    - Nested teams
+    
+    **Examples:**
+    - Complex projects
+    - Organizational hierarchies
+    - Multi-level analysis
+  </Card>
+</CardGroup>
+
+<Warning>
+  **Relationship Consistency**: Ensure relationships match the coordination mode:
+  - Graph mode requires bidirectional "collaborates with" relationships
+  - Tree mode requires "parent" relationships forming a valid tree
+  - Star mode requires all agents to report to a single hub
+  - Chain mode defines sequential processing order
+</Warning>
+
+## Advanced Patterns
+
+### Hybrid Coordination
+
+Combine coordination modes for complex workflows:
+
+```yaml
+# Main coordination is star, but workers collaborate in graph subteams
+coordinate_mode: star
+
+relationships:
+  - [agent2, agent1, "reports_to"]  # Hub coordination
+  - [agent3, agent1, "reports_to"]
+  - [agent4, agent1, "reports_to"]
+  - [agent2, agent3, "collaborates with"]  # Peer collaboration
+  - [agent3, agent2, "collaborates with"]
+```
+
+### Dynamic Relationships
+
+Relationships can evolve during execution based on task needs.
+
+## Best Practices
+
+1. **Match Mode to Task**: Choose coordination mode based on task structure
+2. **Clear Relationships**: Define explicit relationships for all agent pairs
+3. **Avoid Conflicts**: Ensure relationship types match coordination mode
+4. **Test Coordination**: Verify agents follow expected communication patterns
+5. **Monitor Performance**: Track collaboration effectiveness metrics
+6. **Document Workflow**: Clearly document expected agent interactions
+
+## Next Steps
+
+<Card title="Configuration Overview" icon="gear" href="./overview">
+  Return to configuration overview for complete system setup
+</Card>

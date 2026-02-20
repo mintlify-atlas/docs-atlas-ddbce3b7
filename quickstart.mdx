@@ -1,80 +1,300 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Run your first multi-agent simulation with MARBLE in minutes"
 ---
 
-## Get started in three steps
+## Overview
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This quickstart guide will walk you through running your first multi-agent simulation with MARBLE. You'll set up a simple web research task where multiple agents collaborate to gather and summarize information about AI trends.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  Make sure you've completed the [installation](/installation) steps before proceeding.
+</Note>
+
+## Run Your First Simulation
+
+<Steps>
+  <Step title="Create a configuration file">
+    MARBLE uses YAML configuration files to define agents, environments, and tasks. Create a new file called `my_first_config.yaml`:
+
+    ```yaml my_first_config.yaml
+    coordinate_mode: chain
+    
+    relationships:
+      - [researcher, analyst, "reports_to"]
+    
+    llm: "gpt-3.5-turbo"
+    
+    environment:
+      type: Web
+      name: "Web Research Environment"
+      max_iterations: 5
+    
+    task:
+      content: "Research the latest trends in AI and have the analyst summarize the findings."
+    
+    agents:
+      - type: BaseAgent
+        agent_id: researcher
+        profile: "You are a thorough researcher. Use web search to find reliable information about AI trends."
+      
+      - type: BaseAgent
+        agent_id: analyst
+        profile: "You are an analytical thinker. Synthesize research findings into clear, concise summaries."
+    
+    memory:
+      type: SharedMemory
+    
+    engine_planner:
+      initial_progress: "Starting AI trends research simulation."
+    ```
+
+    <Tip>
+      The `coordinate_mode` can be either `chain` (sequential execution) or `graph` (parallel/hierarchical execution based on relationships).
+    </Tip>
+  </Step>
+
+  <Step title="Run the simulation">
+    Execute your multi-agent simulation using the MARBLE engine:
+
+    ```bash
+    python marble/main.py --config_path my_first_config.yaml
+    ```
+
+    You'll see output showing the agents interacting, making decisions, and completing the task:
+
+    ```text
+    INFO - Starting engine with configuration: my_first_config.yaml
+    INFO - Agent 'researcher' initialized.
+    INFO - Agent 'analyst' initialized.
+    INFO - Starting AI trends research simulation.
+    INFO - Agent 'researcher' performing action: web_search
+    INFO - Agent 'analyst' performing action: synthesize_results
+    ...
+    ```
+  </Step>
+
+  <Step title="Review the results">
+    After the simulation completes, MARBLE will output the results. Check the console for the final summary and any generated output files.
+
+    <Note>
+      Results are typically saved in the output directory specified in your configuration or displayed in the console logs.
+    </Note>
+  </Step>
+</Steps>
+
+## Example: Collaborative Code Development
+
+Let's try a more advanced example with multiple agents collaborating on a coding task. This example uses the pre-configured coding environment:
+
+<Steps>
+  <Step title="Navigate to the scripts directory">
+    ```bash
+    cd marble
+    ```
+  </Step>
+
+  <Step title="Run the coding demo">
+    Use the provided demo script to see agents collaborating on software development:
+
+    ```bash
+    bash run_demo.sh
+    ```
+
+    This script runs a simulation where three agents work together:
+    - **Agent 1**: Creates the initial code framework
+    - **Agent 2**: Adds missing functionality
+    - **Agent 3**: Optimizes and refines the code
+  </Step>
+
+  <Step title="Examine the configuration">
+    The coding demo uses the configuration at `marble/configs/coding_config/coding_config.yaml`. Let's look at key sections:
+
+    ```yaml
+    coordinate_mode: graph
+    
+    relationships:
+      - [agent1, agent2, "collaborates with"]
+      - [agent2, agent3, "collaborates with"]
+      - [agent3, agent1, "collaborates with"]
+    
+    llm: "gpt-4o-mini"
+    
+    environment:
+      type: Coding
+      name: "Coding Environment"
+      workspace_dir: "workspace"
+      max_iterations: 5
+    
+    agents:
+      - type: BaseAgent
+        agent_id: agent1
+        profile: |
+          I am a Senior Software Developer specialized in Python.
+          I create code frameworks from scratch.
+          I must call "create_code" action to create the initial code.
+      
+      - type: BaseAgent
+        agent_id: agent2
+        profile: |
+          I am a Senior Software Developer specialized in Python.
+          I add missing functionality to existing code.
+          I must call "give_advice_and_revise_code" action.
+      
+      - type: BaseAgent
+        agent_id: agent3
+        profile: |
+          I am a Senior Software Developer specialized in Python.
+          I optimize and fix issues in existing code.
+          I must call "give_advice_and_revise_code" action.
+    ```
+
+    <Tip>
+      Agent profiles define their expertise and guide their decision-making. Clear profiles lead to better task distribution and collaboration.
+    </Tip>
+  </Step>
+
+  <Step title="Check the output">
+    After the simulation completes, check the workspace directory for the generated code:
+
+    ```bash
+    cat workspace/solution.py
+    ```
+
+    You'll see the collaboratively developed solution!
+  </Step>
+</Steps>
+
+## Understanding Configuration Options
+
+<AccordionGroup>
+  <Accordion title="Coordination Modes">
+    - **chain**: Agents execute sequentially in a linear pipeline
+    - **graph**: Agents execute based on their relationship graph, enabling parallel and hierarchical coordination
+  </Accordion>
+
+  <Accordion title="Environment Types">
+    MARBLE supports multiple environment types:
+    - **Web**: For web browsing and online research tasks
+    - **Coding**: For software development and code generation
+    - **Research**: For academic paper collection and analysis
+    - **Database**: For database diagnostics and optimization
+    - **Minecraft**: For game-playing scenarios
+  </Accordion>
+
+  <Accordion title="Agent Strategies">
+    You can specify reasoning strategies for agents:
+    ```yaml
+    agents:
+      - type: BaseAgent
+        agent_id: agent1
+        strategy: cot  # Chain of Thought reasoning
+    ```
+    
+    Available strategies:
+    - **default**: Standard reasoning
+    - **cot**: Chain of Thought (step-by-step reasoning)
+    - **reflexion**: Reflective reasoning with self-critique
+    - **react**: Reasoning and Acting in synergy
+  </Accordion>
+
+  <Accordion title="Memory Configuration">
+    Configure how agents share information:
+    ```yaml
+    memory:
+      type: SharedMemory
+    ```
+    
+    - **SharedMemory**: Agents can access and update shared state
+    - **BaseMemory**: Individual agent memory without sharing
+  </Accordion>
+</AccordionGroup>
+
+## Running Included Examples
+
+MARBLE includes several example simulations in the `scripts` directory:
+
+<CodeGroup>
+  ```bash Coding Tasks
+  cd scripts/coding
+  bash run_demo.sh
+  ```
+
+  ```bash Database Diagnostics
+  cd scripts/database
+  bash run_simulation.sh
+  ```
+
+  ```bash Research Tasks
+  cd scripts/research
+  bash run_simulation.sh
+  ```
+
+  ```bash Reasoning Tasks
+  cd scripts/reasoning
+  bash run_demo_reasoning.sh
+  ```
+</CodeGroup>
+
+## Next Steps
+
+Now that you've run your first simulations, explore more advanced features:
+
+<CardGroup cols={2}>
+  <Card title="Configuration Guide" icon="gear" href="/configuration/overview">
+    Learn about all configuration options and how to customize agent behavior
+  </Card>
+  
+  <Card title="Environments" icon="globe" href="/environments/overview">
+    Explore different environment types and how to create custom environments
+  </Card>
+  
+  <Card title="Agent Development" icon="robot" href="/concepts/agents">
+    Understand agent architecture and create specialized agent types
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/engine">
+    Dive into the complete API documentation
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Configuration file not found error">
+    Make sure you're running the command from the correct directory and that your config file path is correct:
+    
+    ```bash
+    # Use absolute path
+    python marble/main.py --config_path /full/path/to/config.yaml
+    
+    # Or relative path from project root
+    python marble/main.py --config_path ./my_first_config.yaml
+    ```
+  </Accordion>
+
+  <Accordion title="API rate limit errors">
+    If you hit API rate limits with OpenAI:
+    - Use a lower-cost model like `gpt-3.5-turbo` instead of `gpt-4`
+    - Reduce `max_iterations` in your environment config
+    - Consider using Together AI for alternative models
+  </Accordion>
+
+  <Accordion title="Agents not collaborating as expected">
+    Check your agent profiles and relationships:
+    - Ensure profiles clearly define each agent's role
+    - Verify relationships are properly defined in the `relationships` section
+    - Try switching between `chain` and `graph` coordination modes
+  </Accordion>
+
+  <Accordion title="Empty or incomplete results">
+    If simulations produce incomplete results:
+    - Increase `max_iterations` in the environment config
+    - Make the task description more specific
+    - Check logs for any errors during execution
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  **Need more help?** Check out the [API Reference](/api-reference/introduction) for detailed documentation on all MARBLE components.
 </Note>

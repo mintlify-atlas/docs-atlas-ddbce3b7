@@ -1,0 +1,374 @@
+---
+title: Running Simulations
+description: Learn how to run multi-agent simulations in MARBLE
+---
+
+This guide walks you through the process of running simulations in MARBLE, from basic setup to advanced coordination modes.
+
+## Overview
+
+MARBLE simulations are orchestrated by the `Engine` class, which coordinates agents within an environment. The engine supports multiple coordination modes and can be configured using YAML configuration files.
+
+## Basic Simulation Setup
+
+<Steps>
+  <Step title="Create a Configuration File">
+    Create a YAML configuration file that defines your simulation parameters:
+
+    ```yaml
+    coordinate_mode: graph
+
+    llm: "gpt-4o-mini"
+
+    environment:
+      type: Base
+      name: "Base Environment"
+      max_iterations: 10
+      task_description: "Your task description here"
+      ground_truth: "Expected outcome"
+
+    task:
+      content: |
+        Your detailed task description goes here.
+        This will be the main objective for your agents.
+      output_format: |
+        The final deliverable should include:
+        - Summary of findings
+        - Detailed results
+
+    agents:
+      - type: BaseAgent
+        agent_id: agent1
+        profile: "I am a research agent specialized in data analysis."
+      - type: BaseAgent
+        agent_id: agent2
+        profile: "I am a planning agent specialized in task coordination."
+
+    relationships:
+      - [agent1, agent2, "collaborates with"]
+      - [agent2, agent1, "collaborates with"]
+
+    memory:
+      type: SharedMemory
+
+    metrics:
+      evaluate_llm: "gpt-4o"
+      task_completion: true
+      token_consumption: true
+
+    engine_planner:
+      planning_method: "naive"
+      initial_progress: "Starting simulation."
+
+    output:
+      format: jsonl
+      file_path: "result/output.jsonl"
+    ```
+  </Step>
+
+  <Step title="Run the Simulation">
+    Execute the simulation using the main entry point:
+
+    ```bash
+    python -m marble.main --config_path path/to/your/config.yaml
+    ```
+
+    The engine will:
+    1. Load your configuration
+    2. Initialize the environment
+    3. Create agents with their profiles
+    4. Set up the agent graph with relationships
+    5. Start the coordination loop
+  </Step>
+
+  <Step title="Monitor Progress">
+    The simulation will log progress to the console:
+
+    ```
+    INFO - Engine initialized.
+    INFO - Starting engine with configuration: config.yaml
+    INFO - Running in graph-based coordination mode.
+    INFO - Starting iteration 0
+    INFO - Agent 'agent1' acting on task 'Your task description here'.
+    INFO - Iteration 0 Summary: ...
+    ```
+  </Step>
+
+  <Step title="Access Results">
+    Results are written to the output file specified in your configuration:
+
+    ```python
+    import json
+
+    with open('result/output.jsonl', 'r') as f:
+        for line in f:
+            result = json.loads(line)
+            print(f"Task: {result['task']}")
+            print(f"Coordination Mode: {result['coordination_mode']}")
+            print(f"Iterations: {len(result['iterations'])}")
+    ```
+  </Step>
+</Steps>
+
+## Coordination Modes
+
+MARBLE supports four coordination modes, each suited for different types of multi-agent problems:
+
+### Graph Coordination
+
+```yaml
+coordinate_mode: graph
+```
+
+Agents work autonomously based on their relationships in the agent graph. Each agent plans its own tasks and can communicate with connected agents.
+
+**Use when:** You need flexible, decentralized coordination where agents make independent decisions.
+
+**Example workflow:**
+1. All agents receive the initial task
+2. Each agent acts based on its profile and memory
+3. Agents can initiate communication sessions
+4. Engine decides whether to continue based on progress
+
+### Star Coordination
+
+```yaml
+coordinate_mode: star
+```
+
+Centralized coordination where a planner assigns specific tasks to agents in each iteration.
+
+**Use when:** You need centralized control with explicit task assignment.
+
+**Example workflow:**
+1. Engine planner assigns tasks to agents
+2. Agents execute their assigned tasks
+3. Results are collected and summarized
+4. Planner decides next round of assignments
+
+### Chain Coordination
+
+```yaml
+coordinate_mode: chain
+```
+
+Agents pass tasks sequentially, with each agent selecting the next agent to continue.
+
+**Use when:** Your task naturally flows through a sequence of specialized agents.
+
+**Example workflow:**
+1. Starting agent executes the task
+2. Agent selects next agent based on result and profiles
+3. Task is passed with planning instructions
+4. Chain continues until completion criteria met
+
+### Tree Coordination
+
+```yaml
+coordinate_mode: tree
+```
+
+Hierarchical coordination where parent agents delegate tasks to children.
+
+**Use when:** You have a clear hierarchical structure with delegation needs.
+
+**Example workflow:**
+1. Root agent receives the task
+2. Root plans and assigns subtasks to children
+3. Children execute (potentially delegating further)
+4. Results bubble up for parent summarization
+
+<Tip>
+  Choose your coordination mode based on your problem structure:
+  - **Graph**: Complex, multi-faceted problems requiring peer collaboration
+  - **Star**: Tasks requiring central oversight and planning
+  - **Chain**: Sequential workflows with handoffs
+  - **Tree**: Hierarchical decomposition of complex tasks
+</Tip>
+
+## Environment Types
+
+MARBLE provides specialized environments for different domains:
+
+### Base Environment
+
+```yaml
+environment:
+  type: Base
+  max_iterations: 10
+```
+
+General-purpose environment for any multi-agent task.
+
+### Research Environment
+
+```yaml
+environment:
+  type: Research
+  max_iterations: 5
+```
+
+Optimized for research ideation and academic collaboration.
+
+### Coding Environment
+
+```yaml
+environment:
+  type: Coding
+  workspace_dir: "workspace"
+  max_iterations: 5
+```
+
+Provides tools for collaborative software development (see coding_env.py:1).
+
+### Web Environment
+
+```yaml
+environment:
+  type: Web
+  max_iterations: 8
+```
+
+For tasks involving web interactions and data gathering.
+
+### Database Environment
+
+```yaml
+environment:
+  type: DB
+  max_iterations: 10
+```
+
+For database-related tasks like root cause analysis.
+
+## Advanced Configuration
+
+### Agent Strategies
+
+Agents support different reasoning strategies:
+
+```yaml
+agents:
+  - agent_id: agent1
+    strategy: "cot"  # Chain of Thought
+    profile: "I am a research agent."
+  - agent_id: agent2
+    strategy: "react"  # ReAct framework
+    profile: "I am an action-oriented agent."
+```
+
+Available strategies (base_agent.py:88-111):
+- `default`: Standard reasoning
+- `cot`: Chain of Thought - step-by-step thinking
+- `reflexion`: Reflection process with analysis
+- `react`: Reason-Act-Observe loop
+
+### Custom LLM per Agent
+
+```yaml
+agents:
+  - agent_id: agent1
+    llm: "gpt-4o"  # More powerful model
+    profile: "I am a senior researcher."
+  - agent_id: agent2
+    llm: "gpt-4o-mini"  # Faster, cheaper model
+    profile: "I am a data collector."
+```
+
+### Evaluation Metrics
+
+```yaml
+metrics:
+  evaluate_llm: "gpt-4o"
+  task_completion: true
+  token_consumption: true
+  planning_score: true
+  communication_score: true
+```
+
+The evaluator tracks:
+- Task completion success rate
+- Token usage per agent
+- Planning effectiveness
+- Communication quality
+- Agent KPIs and milestones
+
+### Engine Planner Configuration
+
+```yaml
+engine_planner:
+  planning_method: "naive"  # or "llm_based"
+  initial_progress: "Starting the project."
+  max_planning_iterations: 3
+```
+
+## Common Patterns
+
+### Research Team Simulation
+
+```yaml
+coordinate_mode: graph
+agents:
+  - agent_id: researcher1
+    profile: "Expert in machine learning"
+  - agent_id: researcher2
+    profile: "Expert in data analysis"
+  - agent_id: coordinator
+    profile: "Research coordinator synthesizing findings"
+relationships:
+  - [researcher1, coordinator, "reports to"]
+  - [researcher2, coordinator, "reports to"]
+  - [researcher1, researcher2, "collaborates with"]
+```
+
+### Software Development Team
+
+```yaml
+coordinate_mode: star
+agents:
+  - agent_id: architect
+    profile: "Software architect designing systems"
+  - agent_id: developer1
+    profile: "Backend developer"
+  - agent_id: developer2
+    profile: "Frontend developer"
+  - agent_id: tester
+    profile: "QA engineer"
+```
+
+<Tip>
+  **Best Practice**: Start with a small number of agents (2-3) and simple coordination mode (graph or star) when prototyping. Add complexity as you understand the interaction patterns.
+</Tip>
+
+## Troubleshooting
+
+### Simulation Not Terminating
+
+If your simulation runs for too many iterations:
+
+1. Check `max_iterations` in your environment config
+2. Verify the engine planner is making termination decisions
+3. Review agent task planning logic
+
+### Agents Not Communicating
+
+In graph mode, ensure:
+
+1. Relationships are defined bidirectionally if needed
+2. Agents have the `new_communication_session` function available
+3. Agent profiles encourage communication when appropriate
+
+### High Token Usage
+
+To reduce costs:
+
+1. Use `gpt-4o-mini` instead of `gpt-4o` where possible
+2. Reduce `max_token_num` in agent prompting
+3. Decrease `max_iterations`
+4. Simplify agent profiles and task descriptions
+
+## Next Steps
+
+- Learn about [Creating Custom Agents](/guides/creating-agents)
+- Explore [Building Custom Environments](/guides/custom-environments)
+- Understand [Evaluation Metrics](/guides/evaluation-metrics)

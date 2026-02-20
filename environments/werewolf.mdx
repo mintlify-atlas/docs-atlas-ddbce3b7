@@ -1,0 +1,500 @@
+---
+title: 'Werewolf Game Environment'
+description: 'Social deduction game environment for multi-agent strategic interaction'
+icon: 'wolf'
+---
+
+## Overview
+
+The Werewolf environment simulates the classic social deduction game (also known as Mafia) where agents with different roles compete and cooperate. The game features day/night cycles, special roles with unique abilities, and complex social dynamics.
+
+<Info>
+  Based on the `marble/environments/werewolf_env.py` implementation, this environment provides a complete game simulation with checkpointing and evaluation capabilities.
+</Info>
+
+## Key Features
+
+- **Full Game Simulation**: Complete day/night cycles with role-based actions
+- **Multiple Roles**: Werewolves, Villagers, Seer, Witch, and Guard
+- **Checkpoint System**: Save and load game states at any point
+- **Scoring System**: Process and result-based evaluation
+- **Configurable Teams**: Separate model configurations for villagers and werewolves
+- **Daily Tasks**: Optional guidance system for villagers
+
+## Game Roles
+
+<Tabs>
+  <Tab title="Werewolf">
+    **Role**: Villains who eliminate players at night
+    
+    **Abilities**:
+    - Vote collectively to eliminate one player each night
+    - Know the identity of other werewolves
+    - Must blend in during day discussions
+    
+    **Win Condition**: Eliminate all villagers or equal the number of villagers
+  </Tab>
+  
+  <Tab title="Villager">
+    **Role**: Regular citizens trying to identify werewolves
+    
+    **Abilities**:
+    - Participate in day discussions and voting
+    - Vote to exile suspected werewolves
+    - No special night actions
+    
+    **Win Condition**: Eliminate all werewolves
+  </Tab>
+  
+  <Tab title="Seer">
+    **Role**: Villager with investigation powers
+    
+    **Abilities**:
+    - Check one player's identity each night
+    - Knows whether a player is a werewolf or not
+    - Must subtly guide villagers without revealing identity
+    
+    **Win Condition**: Same as villagers
+  </Tab>
+  
+  <Tab title="Witch">
+    **Role**: Villager with potion abilities
+    
+    **Abilities**:
+    - Has one antidote (can save the werewolf target)
+    - Has one poison (can eliminate any player)
+    - Each potion can only be used once per game
+    
+    **Win Condition**: Same as villagers
+  </Tab>
+  
+  <Tab title="Guard">
+    **Role**: Villager with protection powers
+    
+    **Abilities**:
+    - Protect one player each night from werewolf attacks
+    - Cannot protect the same player on consecutive nights
+    - Protection is invisible to other players
+    
+    **Win Condition**: Same as villagers
+  </Tab>
+</Tabs>
+
+## Configuration
+
+### Basic Setup
+
+```yaml werewolf_config.yaml
+roles:
+  - wolf
+  - wolf
+  - wolf
+  - villager
+  - villager
+  - villager
+  - seer
+  - witch
+  - guard
+
+randomize_roles: true
+use_random_names: true
+cooperation_mode: "cooperative"  # independent, cooperative, or strategic
+use_daily_tasks: true
+
+system_prompt_path: "configs/system_prompt.yaml"
+
+villager_config:
+  base_model: "gpt-3.5-turbo"
+  api_key: "your_api_key"
+  temperature: 0.7
+
+werewolf_config:
+  base_model: "gpt-4"
+  api_key: "your_api_key"
+  temperature: 0.5
+```
+
+<Warning>
+  Currently supports 9-player games. Do not duplicate special roles (seer/witch/guard) as this may cause game logic issues.
+</Warning>
+
+### Cooperation Modes
+
+<Tabs>
+  <Tab title="Independent">
+    Each villager agent acts independently without explicit coordination.
+    
+    ```yaml
+    cooperation_mode: "independent"
+    ```
+  </Tab>
+  
+  <Tab title="Cooperative">
+    Villagers share information and coordinate strategies.
+    
+    ```yaml
+    cooperation_mode: "cooperative"
+    use_daily_tasks: true
+    ```
+  </Tab>
+  
+  <Tab title="Strategic">
+    Advanced coordination with daily task generation and evaluation.
+    
+    ```yaml
+    cooperation_mode: "strategic"
+    use_daily_tasks: true
+    ```
+  </Tab>
+</Tabs>
+
+## Game Flow
+
+### Night Phase
+
+1. **Guard Action**: Guard protects a player
+2. **Werewolf Action**: Werewolves vote on a target
+3. **Seer Action**: Seer checks a player's identity
+4. **Witch Action**: Witch decides on potion usage
+
+```python
+def night(self) -> None:
+    current_night = self.shared_memory["public_state"]["days"]
+    
+    # Reset guard protection
+    self.reset_guard_protection()
+    
+    # Execute night actions in order
+    self.guard_action()
+    self.werewolf_action()
+    self.seer_action()
+    self.witch_action()
+    
+    # Save state
+    with open(self.shared_memory_path, "w") as f:
+        json.dump(self.shared_memory, f, indent=4)
+```
+
+### Day Phase
+
+1. **Announcement**: Reveal who died during the night
+2. **Last Words**: Deceased player's final statement (Day 1 only)
+3. **Sheriff Election**: Only on Day 1
+4. **Speech Order**: Sheriff decides or use default order
+5. **Player Speeches**: Each player speaks in order
+6. **Voting**: Players vote to exile a suspect
+
+```python
+def day(self) -> None:
+    current_day = self.shared_memory["public_state"]["days"]
+    
+    if current_day == 1:
+        # First day special sequence
+        self.run_for_sheriff()
+        deceased = self.get_night_deceased()
+        if deceased:
+            self.last_words(deceased[0])
+    
+    self.update_alive_players()
+    
+    # Determine speech order
+    if self.shared_memory["public_state"]["sheriff"]:
+        speech_order = self.sheriff_decide_speech_order()
+    else:
+        speech_order = sorted(self.shared_memory["public_state"]["alive_players"])
+    
+    # Player speeches and voting
+    self.player_speeches(speech_order[0])
+    self.vote_action()
+```
+
+## Running Simulations
+
+### Start a New Game
+
+```bash
+bash run_simulation.sh \
+  --rounds 10 \
+  --name "werewolf_game_demo" \
+  --config_path "marble/configs/test_config/werewolf_config/werewolf_config.yaml"
+```
+
+### Using Python API
+
+```python
+from marble.environments.werewolf_env import WerewolfEnv
+
+# Initialize environment
+env = WerewolfEnv(
+    name="werewolf_game",
+    config_path="configs/werewolf_config.yaml",
+    log_dir="werewolf_log"
+)
+
+# Start the game
+result = env.start()
+
+print(f"Game Result: {result['result']}")
+print(f"Winner: {result['details']['winner']}")
+print(f"Surviving players: {result['details']['alive_players']}")
+```
+
+## Checkpoint System
+
+### Saving Checkpoints
+
+Checkpoints are automatically saved after each phase:
+
+```python
+# Checkpoint after night
+snapshot_night = env.to_dict(day_night_info=f"Night{current_day}")
+env.save_checkpoint(snapshot_night, f"checkpoint_Night{current_day}.json")
+
+# Checkpoint after day
+snapshot_day = env.to_dict(day_night_info=f"Day{current_day}")
+env.save_checkpoint(snapshot_day, f"checkpoint_Day{current_day}.json")
+```
+
+### Loading from Checkpoint
+
+```python
+# Load from saved checkpoint
+env = WerewolfEnv.load_from_file(
+    file_path="werewolf_log/game_20240120_123456/checkpoint_Day2.json",
+    log_dir="werewolf_log",
+    override_config_path="configs/new_config.yaml"  # Optional
+)
+
+# Continue game from checkpoint
+result = env.continue_game(simulate_one_cycle=True)
+```
+
+## Scoring System
+
+### Process Scores
+
+Awarded during gameplay for specific achievements:
+
+```python
+scores = {
+    "villager": {
+        "total": 0,
+        "details": [
+            "Day 2: Seer survived. +1 point.",
+            "Day 3: Werewolf exiled. +2 points."
+        ]
+    },
+    "werewolf": {
+        "total": 0,
+        "details": []
+    }
+}
+```
+
+### Result Score
+
+Calculated at game end:
+
+```python
+surviving_good = len([p for p in survivors if p['role'] != 'wolf'])
+surviving_wolves = len([p for p in survivors if p['role'] == 'wolf'])
+result_score = surviving_good - surviving_wolves
+```
+
+## Event Logging
+
+The environment maintains multiple log types:
+
+<Tabs>
+  <Tab title="Public Log">
+    Visible to all players:
+    ```python
+    env.log_event(
+        is_private=False,
+        agent_id="agent1",
+        content="Agent1: I think Agent3 is suspicious!"
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Private Log">
+    Only visible in system logs:
+    ```python
+    env.log_event(
+        is_private=True,
+        agent_id="system",
+        content="Werewolves selected Agent5 as target"
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Personal Log">
+    Specific to each agent:
+    ```python
+    # Automatically logged to agent's personal file
+    player_log = shared_memory["private_state"]["players"][agent_id]["personal_event_log"]
+    ```
+  </Tab>
+</Tabs>
+
+## Evaluation
+
+### Run Evaluation on Checkpoints
+
+```bash
+bash run_evaluation.sh \
+  --top_level_dir "path/to/checkpoints" \
+  --config_path "marble/configs/test_config/werewolf_config/werewolf_config.yaml" \
+  --snapshot_folder "evaluation_results" \
+  --base_log_dir "path/to/evaluation/logs"
+```
+
+### Evaluation Modes
+
+<AccordionGroup>
+  <Accordion title="Single-Day Simulation">
+    Load a night checkpoint and simulate one complete day-night cycle:
+    
+    ```python
+    result = env.continue_game(simulate_one_cycle=True)
+    ```
+  </Accordion>
+  
+  <Accordion title="Full-Game Simulation">
+    Load the first night checkpoint and continue until game end:
+    
+    ```python
+    result = env.continue_game(simulate_one_cycle=False)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Output Structure
+
+```
+werewolf_log/
+├── game_20240120_123456_Villagers_win/
+│   ├── shared_memory.json
+│   ├── checkpoint_Night1.json
+│   ├── checkpoint_Day1.json
+│   ├── checkpoint_Night2.json
+│   ├── checkpoint_Day2.json
+│   ├── agent1_thought.txt
+│   ├── agent2_thought.txt
+│   ├── ...
+│   └── result.json
+```
+
+### Result File Format
+
+```json result.json
+{
+  "config": {...},
+  "process_scores": {
+    "villager": {"total": 5, "details": [...]},
+    "werewolf": {"total": 2, "details": [...]}
+  },
+  "result_score": 3,
+  "surviving_players": [
+    {"player_id": "agent1", "role": "villager"},
+    {"player_id": "agent3", "role": "seer"}
+  ],
+  "game_result": "Villagers win"
+}
+```
+
+## Advanced Features
+
+### Daily Tasks
+
+When `use_daily_tasks: true`, the system generates guidance for villagers:
+
+```python
+def generate_daily_tasks(self) -> Tuple[List[str], List[str]]:
+    private_tasks = [
+        "protect_seer",      # Guard should protect the seer
+        "rescue_villager",   # Witch should use antidote
+        "poison_werewolf"    # Witch should use poison
+    ]
+    public_tasks = [
+        "run_for_sheriff",   # Seer should become sheriff
+        "exile_werewolf"     # Vote out a werewolf
+    ]
+    return private_tasks, public_tasks
+```
+
+### Custom System Prompts
+
+Define role-specific prompts in `system_prompt.yaml`:
+
+```yaml system_prompt.yaml
+game_introduction: |
+  Welcome to Werewolf! This is a social deduction game...
+
+werewolf_introduction: |
+  You are a werewolf. Your goal is to eliminate all villagers...
+
+villager_introduction: |
+  You are a villager. Your goal is to identify and eliminate all werewolves...
+
+seer_introduction: |
+  You are the seer. Each night, you can check one player's identity...
+
+witch_introduction: |
+  You are the witch. You have one antidote and one poison...
+
+guard_introduction: |
+  You are the guard. Each night, you can protect one player...
+```
+
+## Best Practices
+
+<Check>Use different models for villagers and werewolves to create asymmetric gameplay</Check>
+<Check>Enable daily tasks for more strategic villager coordination</Check>
+<Check>Save checkpoints regularly for analysis and debugging</Check>
+<Check>Use lower temperature for werewolves to maintain strategic consistency</Check>
+<Check>Monitor agent logs to understand decision-making processes</Check>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Game doesn't terminate">
+    Check that your win conditions are properly configured:
+    ```python
+    def should_terminate(self) -> dict:
+        werewolf_count = len([p for p in alive if role == 'wolf'])
+        non_werewolf_count = len([p for p in alive if role != 'wolf'])
+        
+        if werewolf_count == 0:
+            return {"terminated": True, "result": "Villagers win"}
+        elif non_werewolf_count == 0:
+            return {"terminated": True, "result": "Werewolves win"}
+    ```
+  </Accordion>
+  
+  <Accordion title="Agents not making decisions">
+    Verify that:
+    - API keys are correctly set
+    - Model names are valid
+    - System prompts are loaded properly
+    - Event bus is functioning
+  </Accordion>
+  
+  <Accordion title="Checkpoint loading fails">
+    Ensure:
+    - Checkpoint file exists and is valid JSON
+    - Config path is correct if using override
+    - Agent configurations match
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Research Paper" icon="file-pdf" href="https://arxiv.org/abs/2503.01935">
+    Read the MultiAgentBench paper
+  </Card>
+  <Card title="Source Code" icon="github" href="https://github.com/ulab-uiuc/MARBLE">
+    View on GitHub
+  </Card>
+</CardGroup>

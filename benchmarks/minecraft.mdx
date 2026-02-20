@@ -1,0 +1,500 @@
+---
+title: "Minecraft Benchmark Tasks"
+description: "Collaborative building benchmarks with 100 Minecraft construction scenarios"
+---
+
+## Overview
+
+The Minecraft benchmark evaluates multi-agent collaboration on **collaborative building tasks** in Minecraft. It contains **100 tasks** testing spatial reasoning, resource management, and coordination as agents work together to construct structures according to blueprints.
+
+## Task Characteristics
+
+### Agent Configuration
+- **Number of Agents**: 3
+- **Agent Roles**: Specialized builders with distinct capabilities
+- **Collaboration Mode**: Graph-based peer coordination
+- **Relationship Type**: Full collaboration between all agents
+
+### Environment
+- **Type**: Minecraft Environment
+- **Host**: localhost (default)
+- **Port**: 25565 (default Minecraft server)
+- **Max Iterations**: 20 (typical)
+- **Tools**: Block placement, resource retrieval, auxiliary structure management
+
+## Agent Specializations
+
+### Agent 1: Material Specialist
+**Profile**: Expert at material management and precise placement
+
+**Capabilities**:
+- Finding correct materials in containers
+- Placing blocks in exact locations
+- Using `withdrawItem` to retrieve materials
+- Using `placeBlock` for construction
+- Coordinating with team members
+
+**Responsibilities**:
+- Material retrieval from storage
+- Block placement according to blueprint
+- Coordinate placement accuracy
+
+### Agent 2: Construction Planner
+**Profile**: Expert at designing correct construction order
+
+**Capabilities**:
+- Understanding spatial constraints (blocks can't float)
+- Designing auxiliary support structures
+- Planning optimal build sequence
+- Coordinating with material specialist and auxiliary builder
+
+**Responsibilities**:
+- Determine correct placement order
+- Identify need for temporary structures
+- Direct other agents on build sequence
+
+### Agent 3: Auxiliary Builder
+**Profile**: Expert at temporary structure management
+
+**Capabilities**:
+- Placing auxiliary/scaffolding blocks
+- Removing temporary structures after use
+- Using `placeBlock` and `erectDirtLadder`
+- Using `mineBlock` and `dismantleDirtLadder` for removal
+- Following planner's directions
+
+**Responsibilities**:
+- Create scaffolding for elevated blocks
+- Remove auxiliary structures when no longer needed
+- Support construction of floating elements
+
+## Task Structure
+
+### Blueprint Format
+
+Each task includes a blueprint with:
+
+```json
+{
+  "task": {
+    "content": "Build a building according to a blueprint. The blueprint contains:
+    - Material specifications
+    - Facing directions for directional blocks
+    - Absolute coordinates (x, y, z)
+    - Additional placement requirements"
+  }
+}
+```
+
+### Available Actions
+
+#### Material Management
+```python
+# Retrieve items from container
+withdrawItem(item_name: str, quantity: int)
+
+# Examples
+withdrawItem("stone", 64)
+withdrawItem("oak_planks", 32)
+```
+
+#### Block Placement
+```python
+# Place a single block
+placeBlock(
+    position: Tuple[int, int, int],
+    block_type: str,
+    facing: str = None  # For directional blocks
+)
+
+# Examples
+placeBlock((100, 64, 200), "stone")
+placeBlock((100, 65, 200), "stairs", facing="north")
+```
+
+#### Auxiliary Structures
+```python
+# Create dirt ladder for access
+erectDirtLadder(
+    start: Tuple[int, int, int],
+    height: int
+)
+
+# Remove dirt ladder
+dismantleDirtLadder(
+    start: Tuple[int, int, int],
+    height: int
+)
+
+# Mine/remove blocks
+mineBlock(position: Tuple[int, int, int])
+
+# Examples
+erectDirtLadder((100, 64, 200), height=10)
+dismantleDirtLadder((100, 64, 200), height=10)
+```
+
+## Example Tasks
+
+### Task 1: Simple House Foundation
+
+<Accordion title="View Task Details">
+
+**Blueprint**:
+```yaml
+Structure: 5x5 floor platform
+Material: Stone
+Coordinates: (100, 64, 200) to (104, 64, 204)
+Height: Ground level
+```
+
+**Build Sequence**:
+1. **Agent 1**: Withdraws 25 stone blocks
+2. **Agent 2**: Plans ground-level placement order (no elevation needed)
+3. **Agent 1**: Places blocks row by row
+4. **Agent 3**: No auxiliary structures needed
+
+**Complexity**: Low (no elevation, single material)
+
+</Accordion>
+
+### Task 2: Multi-Level Tower
+
+<Accordion title="View Task Details">
+
+**Blueprint**:
+```yaml
+Structure: 3x3 tower, 10 blocks tall
+Material: Cobblestone
+Coordinates: (150, 64, 250) base
+Height: 10 levels
+Features: Door on ground level (south side)
+```
+
+**Build Sequence**:
+1. **Agent 2**: Plans bottom-up construction
+2. **Agent 1**: Withdraws cobblestone and door
+3. **Agent 3**: Erects dirt ladder for access
+4. **Agent 1**: Places blocks level by level
+5. **Agent 1**: Places door at (151, 64, 250)
+6. **Agent 3**: Removes dirt ladder
+
+**Complexity**: Medium (elevation required, directional block)
+
+</Accordion>
+
+### Task 3: Floating Platform
+
+<Accordion title="View Task Details">
+
+**Blueprint**:
+```yaml
+Structure: 4x4 platform suspended in air
+Material: Oak planks
+Coordinates: (200, 80, 300) to (203, 80, 303)
+Height: 16 blocks above ground (y=80)
+Constraint: No support columns allowed in final structure
+```
+
+**Build Sequence**:
+1. **Agent 2**: Plans complex scaffolding strategy
+2. **Agent 3**: Builds dirt pillar to y=79
+3. **Agent 3**: Creates temporary platform at y=79
+4. **Agent 1**: Withdraws oak planks
+5. **Agent 1**: Places platform blocks from temporary support
+6. **Agent 3**: Removes all temporary structures
+
+**Complexity**: High (elevated, requires complete scaffolding removal)
+
+</Accordion>
+
+### Task 4: Complex Structure with Orientation
+
+<Accordion title="View Task Details">
+
+**Blueprint**:
+```yaml
+Structure: Staircase and landing
+Materials: 
+  - Stone stairs (facing various directions)
+  - Stone blocks
+Coordinates: Stairs from (250, 64, 350) to (250, 70, 356)
+Features:
+  - Each stair faces correct direction for ascent
+  - Landing platform at top
+  - Railings on sides
+```
+
+**Build Sequence**:
+1. **Agent 2**: Plans precise orientation for each stair
+2. **Agent 1**: Withdraws materials (stairs, blocks)
+3. **Agent 3**: Places scaffolding for upper construction
+4. **Agent 1**: Places stairs with correct facing directions
+5. **Agent 1**: Builds landing platform
+6. **Agent 1**: Adds railing blocks
+7. **Agent 3**: Removes scaffolding
+
+**Complexity**: High (multiple materials, orientation critical, elevation)
+
+</Accordion>
+
+## Construction Challenges
+
+### Challenge 1: Floating Blocks
+**Problem**: Blocks cannot be placed in midair without support  
+**Solution**: Use temporary scaffolding, then remove after construction
+
+```python
+# Build floating platform
+# 1. Create temporary support
+agent3.erectDirtLadder((100, 64, 200), height=10)
+agent3.placeBlock((100, 74, 200), "dirt")  # Temp platform
+
+# 2. Place target blocks from support
+agent1.placeBlock((100, 75, 200), "stone")
+
+# 3. Remove temporary structures
+agent3.mineBlock((100, 74, 200))
+agent3.dismantleDirtLadder((100, 64, 200), height=10)
+```
+
+### Challenge 2: Directional Blocks
+**Problem**: Stairs, doors, and other blocks have facing direction  
+**Solution**: Specify correct facing direction in placeBlock
+
+```python
+# Place stairs facing north
+agent1.placeBlock((100, 64, 200), "oak_stairs", facing="north")
+
+# Place door (bottom half)
+agent1.placeBlock((100, 64, 201), "oak_door", facing="east")
+```
+
+### Challenge 3: Build Order Dependencies
+**Problem**: Some blocks must be placed before others  
+**Solution**: Agent 2 analyzes and plans correct sequence
+
+```python
+# Correct order for elevated structure:
+# 1. Ground level
+# 2. Support columns
+# 3. Upper level
+# 4. Remove temporary supports
+```
+
+### Challenge 4: Resource Management
+**Problem**: Need exact materials and quantities  
+**Solution**: Agent 1 calculates and retrieves all needed materials upfront
+
+```python
+# Calculate needs
+total_blocks = structure.count_blocks_by_type()
+
+# Retrieve all at once
+for block_type, quantity in total_blocks.items():
+    agent1.withdrawItem(block_type, quantity)
+```
+
+## Evaluation Metrics
+
+### Structure Accuracy (40%)
+- **Position Correctness**: All blocks at specified coordinates
+- **Material Correctness**: Correct block types used
+- **Orientation Correctness**: Directional blocks facing properly
+- **Completeness**: All blueprint elements present
+
+### Process Efficiency (30%)
+- **Iteration Count**: Fewer iterations is better
+- **Action Count**: Minimal unnecessary actions
+- **Resource Usage**: Efficient material retrieval
+- **Scaffolding Efficiency**: Minimal temporary structures
+
+### Collaboration Quality (20%)
+- **Communication**: Clear coordination between agents
+- **Role Adherence**: Agents following their specializations
+- **Conflict Resolution**: Handling disagreements effectively
+- **Parallel Work**: Agents working simultaneously when possible
+
+### Final Cleanup (10%)
+- **No Auxiliary Blocks**: All temporary structures removed
+- **No Extra Materials**: Container returned to proper state
+- **Clean Workspace**: No unintended blocks placed
+
+## Running Minecraft Benchmarks
+
+### Setup Minecraft Server
+
+```bash
+# Start Minecraft server
+cd minecraft_server
+java -Xmx2G -Xms1G -jar server.jar nogui
+
+# Wait for "Done!" message
+# Server runs on localhost:25565
+```
+
+### Load and Execute Task
+
+```python
+import json
+from marble import MinecraftEnvironment, MultiAgentSystem
+
+# Load Minecraft task
+with open('multiagentbench/minecraft/minecraft_main.jsonl') as f:
+    tasks = [json.loads(line) for line in f]
+
+task = tasks[0]
+
+# Initialize Minecraft environment
+mc_env = MinecraftEnvironment(
+    host=task['environment']['host'],
+    port=task['environment']['port'],
+    max_iterations=task['environment']['max_iterations']
+)
+
+# Create multi-agent system
+mas = MultiAgentSystem(
+    agents=task['agents'],
+    environment=mc_env,
+    relationships=task['relationships']
+)
+
+# Run construction task
+result = mas.run(task['task']['content'])
+
+print(f"Build Complete: {result.success}")
+print(f"Blocks Placed: {result.blocks_placed}")
+print(f"Accuracy: {result.accuracy:.1%}")
+```
+
+### Evaluate Construction
+
+```python
+from marble.benchmarks.minecraft import MinecraftEvaluator
+
+evaluator = MinecraftEvaluator(mc_env)
+
+scores = evaluator.evaluate(
+    blueprint=task['task']['content'],
+    built_structure=result.structure,
+    actions=result.actions
+)
+
+print(f"Structure Accuracy: {scores.accuracy:.2f}")
+print(f"Process Efficiency: {scores.efficiency:.2f}")
+print(f"Collaboration Quality: {scores.collaboration:.2f}")
+print(f"Cleanup Score: {scores.cleanup:.2f}")
+print(f"Overall: {scores.overall:.2f}")
+```
+
+### Batch Evaluation
+
+```python
+from marble.benchmarks import BenchmarkRunner
+
+runner = BenchmarkRunner(
+    benchmark='minecraft',
+    model='gpt-4o',
+    num_tasks=100,
+    output_dir='results/minecraft',
+    minecraft_host='localhost',
+    minecraft_port=25565
+)
+
+results = runner.run_all()
+
+print(f"Tasks Completed: {results.success_rate:.1%}")
+print(f"Avg Accuracy: {results.avg_accuracy:.1%}")
+print(f"Avg Actions: {results.avg_actions:.0f}")
+```
+
+## Visualization
+
+### View Construction Progress
+
+```python
+from marble.benchmarks.minecraft import MinecraftVisualizer
+
+visualizer = MinecraftVisualizer()
+
+# Create time-lapse visualization
+visualizer.create_timelapse(
+    actions=result.actions,
+    output_file='construction_timelapse.mp4',
+    fps=2
+)
+
+# Create 3D structure comparison
+visualizer.compare_structures(
+    blueprint=task['task']['content'],
+    built=result.structure,
+    output_file='structure_comparison.html'
+)
+```
+
+## Best Practices
+
+### For Construction Planning
+1. **Analyze blueprint** completely before starting
+2. **Identify dependencies** early (what must be built first)
+3. **Plan scaffolding** for elevated sections
+4. **Calculate materials** needed upfront
+5. **Consider gravity** (blocks fall if unsupported)
+
+### For Collaboration
+1. **Communicate plans** clearly before execution
+2. **Assign clear roles** based on agent capabilities
+3. **Coordinate timing** to avoid conflicts
+4. **Monitor progress** and adjust plans if needed
+5. **Clean up together** after main construction
+
+### For Efficiency
+1. **Batch material retrieval** instead of multiple trips
+2. **Build from bottom up** generally
+3. **Use minimal scaffolding** needed
+4. **Work in parallel** when possible
+5. **Remove scaffolding** incrementally during build
+
+## Task Difficulty Levels
+
+| Level | Tasks | Characteristics |
+|-------|-------|----------------|
+| **Easy** | 1-30 | Ground level, simple shapes, single material |
+| **Medium** | 31-70 | Some elevation, multiple materials, basic orientation |
+| **Hard** | 71-100 | High elevation, complex shapes, precise orientation, minimal support |
+
+## Common Structures
+
+### Ground Level (Easy)
+- Floors and foundations
+- Simple walls
+- Basic enclosures
+
+### Low Elevation (Medium)
+- Small houses
+- Bridges
+- Staircases
+- Towers (short)
+
+### High Elevation (Hard)
+- Tall towers
+- Floating platforms
+- Complex roofs
+- Arches and overhangs
+
+### Complex Orientation (Hard)
+- Spiral staircases
+- Multi-directional structures
+- Detailed facades
+- Intricate patterns
+
+## Related Benchmarks
+
+<CardGroup cols={2}>
+  <Card title="Coding Benchmarks" icon="code" href="/benchmarks/coding">
+    Program automated Minecraft builders
+  </Card>
+  <Card title="Bargaining Benchmarks" icon="handshake" href="/benchmarks/bargaining">
+    Negotiate resource allocation for builds
+  </Card>
+</CardGroup>

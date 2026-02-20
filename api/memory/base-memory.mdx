@@ -1,0 +1,237 @@
+---
+title: "BaseMemory"
+description: "Base memory module for individual agent memory storage"
+---
+
+## Overview
+
+The `BaseMemory` class provides a simple list-based memory storage system for individual agents. It stores information sequentially and allows retrieval of recent or all stored data.
+
+## Class Definition
+
+```python
+class BaseMemory:
+    """Base class for agent memory modules."""
+```
+
+## Initialization
+
+### `__init__()`
+
+```python
+def __init__(self) -> None:
+    """Initialize the memory module."""
+```
+
+Creates a new BaseMemory instance with an empty storage list.
+
+<ResponseField name="storage" type="List[Any]">
+  Internal list that stores all memory items
+</ResponseField>
+
+**Example:**
+
+```python
+from marble.memory import BaseMemory
+
+# Initialize memory for an agent
+memory = BaseMemory()
+```
+
+## Methods
+
+### `update()`
+
+Add new information to memory storage.
+
+```python
+def update(self, key: str, information: Any) -> None
+```
+
+<ParamField path="key" type="str">
+  Unused parameter kept for signature consistency with SharedMemory
+</ParamField>
+
+<ParamField path="information" type="Any" required>
+  Information to store in memory. Can be any Python object (string, dict, list, etc.)
+</ParamField>
+
+**Example:**
+
+```python
+memory = BaseMemory()
+
+# Store various types of information
+memory.update("", "Task completed successfully")
+memory.update("", {"action": "move", "status": "done"})
+memory.update("", ["item1", "item2"])
+```
+
+### `retrieve_latest()`
+
+Retrieve the most recently stored information.
+
+```python
+def retrieve_latest(self) -> Any
+```
+
+<ResponseField name="return" type="Any">
+  The most recently stored information, or `None` if memory is empty
+</ResponseField>
+
+**Example:**
+
+```python
+memory = BaseMemory()
+memory.update("", "First observation")
+memory.update("", "Second observation")
+
+latest = memory.retrieve_latest()
+print(latest)  # Output: "Second observation"
+```
+
+### `retrieve_all()`
+
+Retrieve all stored information from memory.
+
+```python
+def retrieve_all(self) -> List[Any]
+```
+
+<ResponseField name="return" type="List[Any]">
+  A copy of all stored information in chronological order
+</ResponseField>
+
+**Example:**
+
+```python
+memory = BaseMemory()
+memory.update("", "First observation")
+memory.update("", "Second observation")
+memory.update("", "Third observation")
+
+all_memories = memory.retrieve_all()
+print(len(all_memories))  # Output: 3
+```
+
+### `get_memory_str()`
+
+Get a JSON string representation of all memory contents.
+
+```python
+def get_memory_str(self) -> str
+```
+
+<ResponseField name="return" type="str">
+  Space-separated JSON dumps of all stored information
+</ResponseField>
+
+**Example:**
+
+```python
+memory = BaseMemory()
+memory.update("", {"task": "research", "status": "in_progress"})
+memory.update("", {"task": "research", "status": "completed"})
+
+memory_str = memory.get_memory_str()
+print(memory_str)
+# Output: '{"task": "research", "status": "in_progress"} {"task": "research", "status": "completed"}'
+```
+
+### `__str__()`
+
+Get a human-readable string representation of memory contents.
+
+```python
+def __str__(self) -> str
+```
+
+<ResponseField name="return" type="str">
+  Formatted string showing indexed memory contents
+</ResponseField>
+
+**Example:**
+
+```python
+memory = BaseMemory()
+memory.update("", "First item")
+memory.update("", "Second item")
+
+print(memory)
+# Output:
+# Memory Contents:
+#     0: First item
+#     1: Second item
+```
+
+### `__repr__()`
+
+Get a technical string representation of the memory object.
+
+```python
+def __repr__(self) -> str
+```
+
+<ResponseField name="return" type="str">
+  Technical representation showing the internal storage
+</ResponseField>
+
+## Usage in Agents
+
+`BaseMemory` is typically used as the individual memory for each agent:
+
+```python
+from marble.agent import BaseAgent
+from marble.memory import BaseMemory
+
+class MyAgent(BaseAgent):
+    def __init__(self, config, env, shared_memory=None, model="gpt-3.5-turbo"):
+        super().__init__(config, env, shared_memory, model)
+        # BaseMemory is automatically initialized in BaseAgent
+        # Available as self.memory
+        
+    def observe_environment(self, observation):
+        # Store observation in individual memory
+        self.memory.update("", observation)
+        
+    def recall_recent_action(self):
+        # Retrieve most recent memory
+        return self.memory.retrieve_latest()
+```
+
+## Complete Example
+
+```python
+from marble.memory import BaseMemory
+
+# Initialize memory
+agent_memory = BaseMemory()
+
+# Agent performs actions and stores results
+agent_memory.update("", {"action": "analyze", "result": "pattern_found"})
+agent_memory.update("", {"action": "report", "result": "sent"})
+agent_memory.update("", {"action": "wait", "result": "ready"})
+
+# Retrieve latest memory
+latest_action = agent_memory.retrieve_latest()
+print(f"Latest: {latest_action}")
+# Output: Latest: {'action': 'wait', 'result': 'ready'}
+
+# Get all memories
+all_actions = agent_memory.retrieve_all()
+print(f"Total actions: {len(all_actions)}")
+# Output: Total actions: 3
+
+# Display memory contents
+print(agent_memory)
+# Output:
+# Memory Contents:
+#     0: {'action': 'analyze', 'result': 'pattern_found'}
+#     1: {'action': 'report', 'result': 'sent'}
+#     2: {'action': 'wait', 'result': 'ready'}
+```
+
+## See Also
+
+- [SharedMemory](/api/memory/shared-memory) - Thread-safe memory shared across multiple agents
+- [Agent Configuration](/core-concepts/agents) - How to configure agent memory

@@ -1,0 +1,625 @@
+---
+title: "Bargaining Benchmark Tasks"
+description: "Multi-party negotiation benchmarks with 100 realistic product bargaining scenarios"
+---
+
+## Overview
+
+The Bargaining benchmark evaluates multi-agent collaboration on **negotiation and bargaining tasks**. It contains **100 tasks** based on real product listings, testing agents' ability to negotiate prices and terms while balancing competing interests between buyers and sellers.
+
+## Task Characteristics
+
+### Agent Configuration
+- **Number of Agents**: 4 (1 buyer, 3 sellers or vice versa)
+- **Agent Roles**: Buyers and sellers with competing interests
+- **Collaboration Mode**: Hierarchical (parent-child relationships)
+- **Relationship Type**: Parent relationships between lead agent and others
+
+### Environment
+- **Type**: Bargaining Environment
+- **Max Iterations**: Variable (typically 10-15)
+- **Tools**: Price offers, counteroffers, information sharing, negotiation termination
+- **Products**: Real e-commerce items with actual prices and ratings
+
+## Product Categories
+
+The 100 bargaining tasks cover diverse product categories:
+
+### Electronics & Accessories (30 tasks)
+- Smartphone accessories
+- Computer peripherals
+- IoT devices
+- Gaming controllers
+- Audio equipment
+
+### Home & Living (25 tasks)
+- Storage solutions
+- Organization products
+- Kitchen appliances
+- Home improvement items
+- Furniture
+
+### Fashion & Apparel (20 tasks)
+- Footwear
+- Clothing
+- Accessories
+- Jewelry
+- Bags
+
+### Baby & Kids (15 tasks)
+- Baby shower items
+- Nursery products
+- Children's clothing
+- Toys and games
+- Educational materials
+
+### Office & Supplies (10 tasks)
+- Office organization
+- Presentation materials
+- Writing supplies
+- Filing systems
+- Desk accessories
+
+## Negotiation Factors
+
+Each task includes multiple negotiation dimensions:
+
+### Buyer Priorities
+
+1. **Price and Quality Balance**
+   - Seeking best value for money
+   - Quality standards vs. budget constraints
+   - Comparison with market prices
+
+2. **Warranty and After-Sales Support**
+   - Comprehensive warranty coverage
+   - Return policies
+   - Customer service quality
+   - Technical support availability
+
+3. **Timely Delivery**
+   - Fast shipping requirements
+   - Delivery guarantees
+   - Tracking capabilities
+   - Packaging quality
+
+4. **Battery Condition** (for electronics)
+   - Battery health and longevity
+   - Replacement policies
+   - Performance guarantees
+   - Testing procedures
+
+5. **Scalability and Premium Features**
+   - Upgrade options
+   - Feature completeness
+   - Future-proofing
+   - Compatibility
+
+### Seller Priorities
+
+1. **Higher Profit Margins**
+   - Maintaining price points
+   - Volume discounts consideration
+   - Minimum acceptable prices
+   - Profit targets
+
+2. **Long-Term Contracts**
+   - Securing repeat business
+   - Subscription models
+   - Bulk order agreements
+   - Partnership opportunities
+
+3. **Reducing Logistics Costs**
+   - Efficient shipping methods
+   - Bulk delivery optimization
+   - Warehouse proximity
+   - Fulfillment efficiency
+
+4. **Justifying Premium Pricing**
+   - Product differentiation
+   - Quality demonstrations
+   - Brand value communication
+   - Feature highlighting
+
+5. **Production and Demand Balance**
+   - Inventory management
+   - Production scheduling
+   - Supply chain optimization
+   - Demand forecasting
+
+## Example Tasks
+
+### Task 1: Electronics Remote Control
+
+<Accordion title="View Full Task Details">
+
+**Product**: Replacement Remote Control for HISENSE Air Conditioner
+
+**Product Details**:
+- **Original Price**: Not specified
+- **Current Price**: Market variable
+- **Rating**: 4.5/5 stars
+- **Category**: Electronics/Home Appliances
+
+**Buyer Priority**: Scalability and premium features  
+**Seller Priority**: Higher profit margins
+
+**Negotiation Context**:
+```text
+Buyers are focused on ensuring the remote has advanced features 
+and compatibility with multiple AC models, while sellers aim to 
+maintain healthy margins on this replacement accessory.
+
+Key Discussion Points:
+- Compatibility guarantees
+- Feature completeness vs. cost
+- Bulk purchase discounts
+- Warranty terms
+```
+
+**Expected Negotiation Flow**:
+1. Buyer requests detailed feature list
+2. Seller highlights premium features
+3. Buyer proposes price based on market comparison
+4. Seller counters with value justification
+5. Both negotiate middle ground
+
+</Accordion>
+
+### Task 2: Baby Shower Nursery Set
+
+<Accordion title="View Full Task Details">
+
+**Product**: Lambs & Ivy Forever Friends 4-Piece Nursery Crib Baby Bedding Set
+
+**Product Details**:
+- **Original Price**: $149.99 USD
+- **Rating**: 4.8/5 stars
+- **Category**: Baby & Kids
+- **Colors**: Blue and Pink
+
+**Buyer Priority**: Battery condition (interpreted as quality/durability)  
+**Seller Priority**: Long-term contracts
+
+**Negotiation Context**:
+```text
+Buyers want assurance of product quality and durability for their 
+baby, while sellers seek to establish ongoing relationships with 
+expectant parents for future purchases.
+
+Key Discussion Points:
+- Material quality and safety certifications
+- Durability and washing instructions
+- Bundle deals for future purchases
+- Registry program enrollment
+```
+
+</Accordion>
+
+### Task 3: Utility Rolling Cart
+
+<Accordion title="View Full Task Details">
+
+**Product**: 3 Tier Utility Rolling Cart Multifunction Organizer Shelf Storage Cart
+
+**Product Details**:
+- **Price**: $46.99 USD
+- **Rating**: 4.7/5 stars
+- **Category**: Home & Organization
+- **Color**: Pink
+
+**Buyer Priority**: Timely delivery  
+**Seller Priority**: Justifying premium pricing
+
+**Negotiation Context**:
+```text
+Buyers need the cart urgently for home organization, while sellers 
+must justify the price point relative to simpler alternatives.
+
+Key Discussion Points:
+- Expedited shipping options and costs
+- Product build quality vs. cheaper alternatives
+- Assembly requirements and instructions
+- Customer reviews and satisfaction
+```
+
+</Accordion>
+
+## Negotiation Tools
+
+Agents have access to specific negotiation actions:
+
+### Offer Price
+```python
+def offer_price(price: float, reason: str) -> dict:
+    """
+    Make a price offer with justification.
+    
+    Args:
+        price: Proposed price in USD
+        reason: Explanation for the price point
+    
+    Returns:
+        Offer status and response
+    """
+    return {
+        "action": "offer",
+        "price": price,
+        "reason": reason
+    }
+
+# Example
+offer_price(45.00, "Market analysis shows similar products at $40-50")
+```
+
+### Reject and Counter
+```python
+def reject_and_counter(
+    counter_price: float,
+    reason: str,
+    concessions: list = None
+) -> dict:
+    """
+    Reject current offer and propose counter-offer.
+    
+    Args:
+        counter_price: New proposed price
+        reason: Explanation for rejection and counter
+        concessions: Optional non-price benefits
+    
+    Returns:
+        Counter-offer details
+    """
+    return {
+        "action": "counter",
+        "price": counter_price,
+        "reason": reason,
+        "concessions": concessions or []
+    }
+
+# Example
+reject_and_counter(
+    50.00,
+    "Premium materials and 4.7-star rating justify higher price",
+    concessions=["Free expedited shipping", "Extended warranty"]
+)
+```
+
+### Provide Information
+```python
+def provide_information(info_type: str, details: dict) -> dict:
+    """
+    Share relevant information to support negotiation position.
+    
+    Args:
+        info_type: Type of information (product, market, terms)
+        details: Specific information to share
+    
+    Returns:
+        Information package
+    """
+    return {
+        "action": "inform",
+        "type": info_type,
+        "details": details
+    }
+
+# Example
+provide_information(
+    "product_quality",
+    {
+        "materials": "Premium steel construction",
+        "weight_capacity": "50 lbs per tier",
+        "warranty": "2 years"
+    }
+)
+```
+
+### End Negotiation
+```python
+def end_negotiation(outcome: str, final_terms: dict = None) -> dict:
+    """
+    Terminate negotiation with agreement or walk away.
+    
+    Args:
+        outcome: "agree" or "walk_away"
+        final_terms: Agreed terms if outcome is "agree"
+    
+    Returns:
+        Negotiation conclusion
+    """
+    return {
+        "action": "end",
+        "outcome": outcome,
+        "terms": final_terms
+    }
+
+# Example - Agreement
+end_negotiation(
+    "agree",
+    {
+        "price": 47.50,
+        "shipping": "expedited (3 days)",
+        "warranty": "standard 1 year"
+    }
+)
+
+# Example - Walk away
+end_negotiation("walk_away")
+```
+
+## Task Structure
+
+### Bargaining Task Format
+
+```json
+{
+  "scenario": "bargaining",
+  "task_id": 1,
+  "coordinate_mode": "",
+  "relationships": [
+    ["agent1", "agent2", "parent"],
+    ["agent1", "agent3", "parent"],
+    ["agent1", "agent4", "parent"]
+  ],
+  "task": {
+    "content": "Negotiation scenario with product details, buyer priorities, seller priorities, and challenges...",
+    "output_format": "Expected negotiation summary format"
+  }
+}
+```
+
+### Output Format
+
+Tasks expect structured negotiation summaries:
+
+```markdown
+**[Iteration Summary]**
+The buyer offered a price of $45.00, citing market conditions. 
+The seller countered with $50.00, emphasizing product quality. 
+Both agents are actively using tools to justify their positions.
+
+**[Agent Actions and Tools Used]**
+- **Agent 1 (Buyer)**:
+  - Action Taken: Offer Price
+  - Tool Parameters: {"price": 45.00, "reason": "Market analysis"}
+  - Result: Offer rejected by seller
+
+- **Agent 2 (Seller)**:
+  - Action Taken: Reject and Counter
+  - Tool Parameters: {"price": 50.00, "reason": "Premium quality"}
+  - Result: Counter-offer made
+```
+
+## Evaluation Metrics
+
+### Deal Quality (35%)
+- **Price Fairness**: How close to market value?
+- **Mutual Benefit**: Do both parties gain?
+- **Term Completeness**: Are all aspects covered?
+- **Sustainability**: Is agreement viable long-term?
+
+### Negotiation Process (30%)
+- **Tool Usage**: Effective use of negotiation tools
+- **Communication**: Clear and professional dialogue
+- **Reasoning**: Logical justifications for positions
+- **Flexibility**: Willingness to find middle ground
+
+### Satisfaction (20%)
+- **Buyer Satisfaction**: Needs met within budget
+- **Seller Satisfaction**: Profitable and sustainable
+- **Priority Alignment**: Key priorities addressed
+- **Relationship Quality**: Potential for future deals
+
+### Efficiency (15%)
+- **Iteration Count**: Reaching agreement quickly
+- **Concession Balance**: Fair give-and-take
+- **Information Sharing**: Transparency where appropriate
+- **Decision Quality**: Well-informed choices
+
+## Running Bargaining Benchmarks
+
+### Load and Execute Task
+
+```python
+import json
+from marble import BargainingEnvironment, MultiAgentSystem
+
+# Load bargaining task
+with open('multiagentbench/bargaining/bargaining_main.jsonl') as f:
+    tasks = [json.loads(line) for line in f]
+
+task = tasks[0]
+
+# Initialize bargaining environment
+bargain_env = BargainingEnvironment(
+    max_iterations=task['environment']['max_iterations']
+)
+
+# Create multi-agent system
+mas = MultiAgentSystem(
+    agents=task['agents'],
+    environment=bargain_env,
+    relationships=task['relationships']
+)
+
+# Run negotiation
+result = mas.run(task['task']['content'])
+
+print(f"Deal Reached: {result.agreement}")
+if result.agreement:
+    print(f"Final Price: ${result.terms['price']:.2f}")
+    print(f"Iterations: {result.iterations}")
+```
+
+### Evaluate Negotiation
+
+```python
+from marble.benchmarks.bargaining import BargainingEvaluator
+
+evaluator = BargainingEvaluator()
+
+scores = evaluator.evaluate(
+    negotiation_history=result.messages,
+    final_terms=result.terms,
+    product_info=task['task']['product'],
+    buyer_priorities=task['task']['buyer_priorities'],
+    seller_priorities=task['task']['seller_priorities']
+)
+
+print(f"Deal Quality: {scores.deal_quality:.2f}")
+print(f"Process Quality: {scores.process:.2f}")
+print(f"Buyer Satisfaction: {scores.buyer_satisfaction:.2f}")
+print(f"Seller Satisfaction: {scores.seller_satisfaction:.2f}")
+print(f"Overall Score: {scores.overall:.2f}")
+```
+
+### Batch Evaluation
+
+```python
+from marble.benchmarks import BenchmarkRunner
+
+runner = BenchmarkRunner(
+    benchmark='bargaining',
+    model='gpt-4o',
+    num_tasks=100,
+    output_dir='results/bargaining'
+)
+
+results = runner.run_all()
+
+print(f"Agreement Rate: {results.agreement_rate:.1%}")
+print(f"Avg Final Price: ${results.avg_price:.2f}")
+print(f"Avg Iterations: {results.avg_iterations:.1f}")
+print(f"Avg Satisfaction: {results.avg_satisfaction:.2f}")
+```
+
+## Example Negotiation
+
+### Task: Rolling Cart Negotiation
+
+**Product**: 3-Tier Utility Cart ($46.99, 4.7★)  
+**Buyer Priority**: Timely delivery  
+**Seller Priority**: Premium pricing justification
+
+**Negotiation Flow**:
+
+```python
+# Round 1: Buyer opens
+buyer.offer_price(
+    40.00,
+    "Similar 3-tier carts available at $35-45 range"
+)
+
+# Round 2: Seller responds
+seller.reject_and_counter(
+    46.99,
+    "Premium steel construction and 4.7-star rating justify price",
+    concessions=["Free standard shipping"]
+)
+
+# Round 3: Buyer emphasizes priority
+buyer.provide_information(
+    "delivery_requirement",
+    {"needed_by": "5 days", "reason": "home organization project"}
+)
+
+# Round 4: Seller offers solution
+seller.reject_and_counter(
+    44.99,
+    "$2 discount for volume, includes expedited shipping (3 days)",
+    concessions=[
+        "Expedited shipping (normally $8.99)",
+        "Assembly video tutorial"
+    ]
+)
+
+# Round 5: Buyer accepts
+buyer.end_negotiation(
+    "agree",
+    {
+        "price": 44.99,
+        "shipping": "expedited (3 days)",
+        "extras": ["assembly tutorial"],
+        "warranty": "standard"
+    }
+)
+```
+
+**Outcome Analysis**:
+- **Price**: $44.99 (buyer saved $2, seller maintains margin)
+- **Delivery**: Expedited shipping meets buyer's timeline
+- **Seller**: Added value without deep discount
+- **Iterations**: 5 (efficient)
+- **Satisfaction**: High for both parties
+
+## Negotiation Strategies
+
+### For Buyers
+
+1. **Anchoring**: Start with reasonable but low offer
+2. **Market Research**: Reference comparable products
+3. **Priority Focus**: Emphasize key requirements
+4. **Bundle Thinking**: Request package deals
+5. **Walk-Away Willingness**: Have alternatives ready
+
+### For Sellers
+
+1. **Value Demonstration**: Highlight quality and features
+2. **Concession Trading**: Offer non-price benefits
+3. **Volume Opportunities**: Suggest bulk or future purchases
+4. **Premium Justification**: Explain price differentiation
+5. **Relationship Building**: Focus on long-term partnership
+
+## Common Challenges
+
+### Challenge 1: Price Gap
+**Problem**: Large difference between buyer/seller expectations  
+**Solution**: Find creative middle ground with concessions
+
+### Challenge 2: Priority Mismatch
+**Problem**: Buyer wants speed, seller wants commitment  
+**Solution**: Package deal with expedited delivery + future order
+
+### Challenge 3: Information Asymmetry
+**Problem**: One party has more market knowledge  
+**Solution**: Share relevant information transparently
+
+### Challenge 4: Impasse
+**Problem**: Neither party willing to move  
+**Solution**: Introduce third-party mediation or walk away
+
+## Best Practices
+
+### For Effective Negotiation
+1. **Start with research** on market prices and alternatives
+2. **Listen actively** to understand other party's priorities
+3. **Use tools appropriately** with clear reasoning
+4. **Be flexible** on non-critical points
+5. **Document agreements** clearly
+
+### For Agent Design
+1. **Model realistic behaviors** (not always adversarial)
+2. **Include personality** traits (aggressive, cooperative, etc.)
+3. **Implement learning** from previous negotiations
+4. **Balance interests** appropriately
+5. **Know when to walk away**
+
+## Task Difficulty Levels
+
+| Level | Tasks | Characteristics |
+|-------|-------|----------------|
+| **Simple** | 1-30 | Small price gap, aligned priorities, clear market value |
+| **Moderate** | 31-70 | Moderate price gap, some priority conflicts, multiple terms |
+| **Complex** | 71-100 | Large price gap, competing priorities, multi-dimensional negotiation |
+
+## Related Benchmarks
+
+<CardGroup cols={2}>
+  <Card title="Research Benchmarks" icon="flask" href="/benchmarks/research">
+    Research negotiation strategies and game theory
+  </Card>
+  <Card title="Coding Benchmarks" icon="code" href="/benchmarks/coding">
+    Build automated negotiation systems
+  </Card>
+</CardGroup>

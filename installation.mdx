@@ -1,0 +1,172 @@
+---
+title: "Installation"
+description: "Set up MARBLE in your development environment"
+---
+
+## Prerequisites
+
+Before installing MARBLE, ensure you have the following:
+
+- **Python**: Version 3.9 to 3.11 (3.12 is not yet supported)
+- **Poetry**: Python dependency management tool
+- **API Keys**: OpenAI API key and/or Together AI API key for LLM access
+
+## Installation Methods
+
+<Steps>
+  <Step title="Set up Python environment">
+    We recommend using a virtual environment to isolate your MARBLE installation. You can use conda, venv, or any other virtual environment manager.
+
+    <CodeGroup>
+      ```bash Conda
+      # Create a new conda environment
+      conda create -n marble python=3.10
+      conda activate marble
+      ```
+
+      ```bash venv
+      # Create a new virtual environment
+      python -m venv marble-env
+      source marble-env/bin/activate  # On Windows: marble-env\Scripts\activate
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Install Poetry">
+    MARBLE uses Poetry for dependency management. Install it using the official installer:
+
+    ```bash
+    curl -sSL https://install.python-poetry.org | python3 -
+    export PATH="$HOME/.local/bin:$PATH"
+    ```
+
+    <Tip>
+      Add the export command to your shell profile (~/.bashrc, ~/.zshrc, etc.) to make Poetry available in all terminal sessions.
+    </Tip>
+  </Step>
+
+  <Step title="Clone the repository">
+    Clone the MARBLE repository from GitHub:
+
+    ```bash
+    git clone https://github.com/ulab-uiuc/MARBLE.git
+    cd MARBLE
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Use Poetry to install all required dependencies:
+
+    ```bash
+    poetry install
+    ```
+
+    This will install all dependencies specified in `pyproject.toml`, including:
+    - LiteLLM for unified LLM access
+    - Pydantic for data validation
+    - Beartype for runtime type checking
+    - Flask for web-based environments
+    - And many more specialized packages
+  </Step>
+
+  <Step title="Configure environment variables">
+    MARBLE requires API keys to access LLM providers. Set up your environment variables:
+
+    ```bash
+    # Copy the template file
+    cp .env.template .env
+    ```
+
+    Then edit the `.env` file with your API keys:
+
+    ```bash .env
+    # OpenAI API Key
+    OPENAI_API_KEY="sk-your-openai-api-key-here"
+
+    # Together AI API Key (optional)
+    TOGETHERAI_API_KEY="your-together-ai-key-here"
+    ```
+
+    <Warning>
+      Never commit your `.env` file to version control. It's already included in `.gitignore` to prevent accidental exposure of your API keys.
+    </Warning>
+  </Step>
+
+  <Step title="Verify installation">
+    Verify that MARBLE is correctly installed by running the test suite:
+
+    ```bash
+    poetry run pytest
+    ```
+
+    If all tests pass, your installation is ready to use!
+
+    <Tip>
+      You can also run type checking to ensure code quality:
+      ```bash
+      poetry run mypy --config-file pyproject.toml .
+      ```
+    </Tip>
+  </Step>
+</Steps>
+
+## Alternative: Docker Installation
+
+MARBLE includes Docker support for containerized deployments. While the Docker setup is primarily used for specific environments (like database diagnostics), you can use it for consistent deployment:
+
+```bash
+# Build and run with Docker Compose
+docker-compose up -d
+```
+
+<Note>
+  Docker setup is particularly useful for the database environment, which requires PostgreSQL and Prometheus for anomaly detection scenarios.
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Poetry not found after installation">
+    If Poetry is not found after installation, make sure to add it to your PATH:
+    
+    ```bash
+    export PATH="$HOME/.local/bin:$PATH"
+    ```
+    
+    Add this line to your shell configuration file (~/.bashrc or ~/.zshrc) to make it permanent.
+  </Accordion>
+
+  <Accordion title="Python version compatibility issues">
+    MARBLE requires Python 3.9-3.11. If you're using Python 3.12 or later, you'll need to downgrade:
+    
+    ```bash
+    conda install python=3.10
+    ```
+  </Accordion>
+
+  <Accordion title="Dependency conflicts during installation">
+    If you encounter dependency conflicts, try updating Poetry and clearing the cache:
+    
+    ```bash
+    poetry self update
+    poetry cache clear pypi --all
+    poetry install
+    ```
+  </Accordion>
+
+  <Accordion title="API key not recognized">
+    Make sure your `.env` file is in the root directory of the project and that the keys are properly formatted without quotes or extra spaces:
+    
+    ```bash
+    OPENAI_API_KEY=sk-your-key-here
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+Now that you have MARBLE installed, you're ready to run your first multi-agent simulation!
+
+<Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+  Follow our quickstart guide to run your first multi-agent simulation
+</Card>

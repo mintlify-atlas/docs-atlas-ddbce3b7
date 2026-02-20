@@ -1,0 +1,569 @@
+---
+title: 'Memory Systems'
+description: 'Understand how MARBLE stores and retrieves information for agents'
+icon: 'brain'
+---
+
+## Overview
+
+Memory systems in MARBLE enable agents to store, retrieve, and reason about past experiences. MARBLE provides multiple memory types optimized for different use cases and retention patterns.
+
+## Memory Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  Memory Systems                     │
+│                                                     │
+│  ┌───────────────┐  ┌──────────────────────────┐  │
+│  │  BaseMemory   │  │  Sequential storage      │  │
+│  │               │  │  Simple append/retrieve  │  │
+│  └───────────────┘  └──────────────────────────┘  │
+│                                                     │
+│  ┌───────────────┐  ┌──────────────────────────┐  │
+│  │ ShortTerm     │  │  Limited capacity        │  │
+│  │ Memory        │  │  Auto-summarization      │  │
+│  └───────────────┘  └──────────────────────────┘  │
+│                                                     │
+│  ┌───────────────┐  ┌──────────────────────────┐  │
+│  │ LongTerm      │  │  Semantic search         │  │
+│  │ Memory        │  │  Embedding-based         │  │
+│  └───────────────┘  └──────────────────────────┘  │
+│                                                     │
+│  ┌───────────────┐  ┌──────────────────────────┐  │
+│  │ Shared        │  │  Multi-agent             │  │
+│  │ Memory        │  │  Thread-safe             │  │
+│  └───────────────┘  └──────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+```
+
+## BaseMemory
+
+The foundation for all memory types, providing simple sequential storage:
+
+```python marble/memory/base_memory.py
+class BaseMemory:
+    """Base class for agent memory modules."""
+    
+    def __init__(self) -> None:
+        """Initialize the memory module."""
+        self.storage: List[Any] = []
+    
+    def update(self, key: str, information: Any) -> None:
+        """
+        Update memory with new information.
+        
+        Args:
+            key (str): Only here to keep signature consistent with SharedMemory.
+            information (Any): Information to store.
+        """
+        self.storage.append(information)
+    
+    def retrieve_latest(self) -> Any:
+        """
+        Retrieve the most recent information from memory.
+        
+        Returns:
+            Any: The most recently stored information, or None if empty.
+        """
+        return self.storage[-1] if self.storage else None
+    
+    def retrieve_all(self) -> List[Any]:
+        """
+        Retrieve all stored information.
+        
+        Returns:
+            List[Any]: All stored information.
+        """
+        return self.storage.copy()
+    
+    def get_memory_str(self) -> str:
+        """
+        Get a string representation of the memory.
+        
+        Returns:
+            str: String representation of the memory.
+        """
+        memory_str = " ".join([json.dumps(info) for info in self.storage])
+        return memory_str
+```
+
+See [marble/memory/base_memory.py:9-74](/home/daytona/workspace/source/marble/memory/base_memory.py#L9-L74)
+
+**Use Cases**:
+- Simple task tracking
+- Development and debugging
+- Short sessions with limited history
+
+## ShortTermMemory
+
+Automatic summarization when capacity is exceeded:
+
+```python marble/memory/short_term_memory.py
+class ShortTermMemory(BaseMemory):
+    """
+    Short term memory class that automatically summarizes old information.
+    """
+    
+    def __init__(self, memory_limit: int = 10) -> None:
+        """
+        Initialize the memory module.
+        
+        Args:
+            memory_limit (int): Maximum length of the memory.
+        """
+        super().__init__()
+        self.memory_limit: int = memory_limit
+        self.storage: List[Dict[str, Union[str, Message]]] = []
+    
+    def update(self, key: str, information: Dict[str, Any]) -> None:
+        """
+        Update memory with new information.
+        Automatically summarizes when limit is reached.
+        
+        Args:
+            key (str): Only here to keep signature consistent.
+            information (Dict[str, Union[str, Message]]): Information to store.
+        """
+        if len(self.storage) >= self.memory_limit:
+            if len(self.storage) >= 2:
+                # Summarize two oldest events
+                oldest_event = self.storage.pop(0)
+                sec_oldest_event = self.storage.pop(0)
+                summary = self.summarize([oldest_event, sec_oldest_event])
+                self.storage.insert(
+                    0, {"type": "old_memory_summary", "result": summary}
+                )
+            elif len(self.storage) == 1:
+                # Summarize single oldest event
+                oldest_event = self.storage.pop(0)
+                summary = self.summarize([oldest_event])
+                self.storage.insert(
+                    0, {"type": "old_memory_summary", "result": summary}
+                )
+        self.storage.append(information)
+    
+    def summarize(self, memory: List[Dict[str, Union[str, Message]]]) -> Message:
+        """
+        Summarize the input memory using LLM.
+        
+        Args:
+            memory (List[Dict[str, Union[str, Message]]]): Input memory to be summarized.
+        
+        Returns:
+            Message: Summary of the input memory.
+        """
+        if not memory:
+            memory = self.storage
+        
+        prompt = "You are a helpful assistant that can concisely summarize "
+        prompt += "the following json format content in temporal order:\n"
+        for idx, information in enumerate(memory):
+            prompt += f"{idx}. {str(information)}\n"
+        
+        summary = model_prompting(
+            llm_model="gpt-3.5-turbo",
+            messages=[{"role": "system", "content": prompt}],
+            return_num=1,
+            max_token_num=512,
+            temperature=0.0,
+            top_p=None,
+            stream=None,
+        )[0]
+        return summary
+```
+
+See [marble/memory/short_term_memory.py:9-94](/home/daytona/workspace/source/marble/memory/short_term_memory.py#L9-L94)
+
+**Key Features**:
+- **Automatic summarization**: Old memories are compressed using LLM
+- **Fixed capacity**: Prevents unbounded memory growth
+- **Temporal ordering**: Maintains chronological sequence
+
+**Use Cases**:
+- Long-running conversations
+- Iterative tasks with many steps
+- Agents that need recent context without full history
+
+<Info>
+  ShortTermMemory is ideal for **chat-like interactions** where recent context matters most but full history would be too verbose.
+</Info>
+
+## LongTermMemory
+
+Semantic retrieval using embeddings:
+
+```python marble/memory/long_term_memory.py
+class LongTermMemory(BaseMemory):
+    """
+    Long term memory class that implements memory retrieval.
+    """
+    
+    def __init__(self) -> None:
+        """Initialize the memory module."""
+        super().__init__()
+        self.storage: List[tuple[Any, Any]] = []  # (information, embedding)
+    
+    def update(self, key: str, information: Dict[str, Any]) -> None:
+        """
+        Update memory with new information.
+        Stores information with its embedding.
+        
+        Args:
+            key (str): Only here to keep signature consistent.
+            information (Dict[str, Any]): Information to store.
+        """
+        # Generate embedding
+        embedding = text_embedding(
+            model="text-embedding-3-small",
+            input=str(information),
+        )
+        embedding_array: NDArray[Any] = np.array(embedding)
+        
+        # Store with embedding
+        self.storage.append((information, embedding_array))
+    
+    def retrieve_most_relevant(
+        self,
+        information: Dict[str, Union[str, Message]],
+        n: int = 1,
+        summarize: bool = False,
+    ) -> Any:
+        """
+        Retrieve the most relevant information from memory.
+        
+        Args:
+            information (Dict): Query for retrieval.
+            n (int): Number of items to retrieve.
+            summarize (bool): Whether to summarize retrieved information.
+        
+        Returns:
+            Union[List[Dict], Message]: Most relevant information or summary.
+        """
+        if not self.storage:
+            return None
+        
+        # Generate query embedding
+        embedding = text_embedding(
+            model="text-embedding-3-small",
+            input=str(information),
+        )
+        embedding_array: NDArray[Any] = np.array(embedding)
+        
+        # Calculate cosine similarity for all stored memories
+        retrieval_scores = []
+        for stored_information in self.storage:
+            similarity = cosine_similarity(
+                stored_information[1].reshape((1, -1)),
+                embedding_array.reshape((1, -1))
+            )[0][0]
+            retrieval_scores.append((stored_information[0], similarity))
+        
+        # Sort by similarity and get top n
+        retrieval_scores = sorted(
+            retrieval_scores, key=lambda score: score[1], reverse=True
+        )[:n]
+        
+        if summarize:
+            summary = self.summarize(
+                [scored_information[0] for scored_information in retrieval_scores]
+            )
+            return summary
+        else:
+            return [information[0] for information in retrieval_scores]
+```
+
+See [marble/memory/long_term_memory.py:14-89](/home/daytona/workspace/source/marble/memory/long_term_memory.py#L14-L89)
+
+**Key Features**:
+- **Semantic search**: Finds similar memories by meaning, not just keywords
+- **Embedding-based**: Uses vector embeddings for retrieval
+- **Scalable**: Efficient for large memory stores
+
+**Use Cases**:
+- Knowledge bases
+- RAG (Retrieval-Augmented Generation)
+- Learning from past experiences
+- Complex reasoning tasks
+
+<Note>
+  LongTermMemory is perfect for **knowledge-intensive tasks** where agents need to recall relevant past experiences based on semantic similarity.
+</Note>
+
+## SharedMemory
+
+Thread-safe memory for multi-agent coordination:
+
+```python marble/memory/shared_memory.py
+class SharedMemory:
+    """
+    Shared memory accessible by multiple agents.
+    """
+    
+    def __init__(self) -> None:
+        """
+        Initialize the shared memory with thread-safe access.
+        """
+        self.storage: Dict[str, Any] = {}
+        self.lock = Lock()
+    
+    def update(self, key: str, information: Any) -> None:
+        """
+        Update shared memory with new information.
+        
+        Args:
+            key (str): Key under which to store the information.
+            information (Any): Information to store.
+        """
+        with self.lock:
+            self.storage[key] = information
+    
+    def retrieve(self, key: str) -> Any:
+        """
+        Retrieve information from shared memory.
+        
+        Args:
+            key (str): Key of the information to retrieve.
+        
+        Returns:
+            Any: The retrieved information, or None if key does not exist.
+        """
+        with self.lock:
+            return self.storage.get(key)
+    
+    def retrieve_all(self) -> Dict[str, Any]:
+        """
+        Retrieve all information from shared memory.
+        
+        Returns:
+            Dict[str, Any]: A copy of all stored information.
+        """
+        with self.lock:
+            return self.storage.copy()
+```
+
+See [marble/memory/shared_memory.py:9-54](/home/daytona/workspace/source/marble/memory/shared_memory.py#L9-L54)
+
+**Key Features**:
+- **Thread-safe**: Uses locks for concurrent access
+- **Key-value storage**: Dictionary-based interface
+- **Global scope**: Accessible by all agents
+
+**Use Cases**:
+- Shared state across agents
+- Coordination information
+- Global knowledge base
+- Cognitive evolution planning (storing expected results)
+
+<Warning>
+  SharedMemory should be used for **coordination** rather than as a primary data store. Too much reliance on shared state can reduce agent autonomy.
+</Warning>
+
+## Memory in Agent Actions
+
+Agents automatically update their memory after each action:
+
+```python
+# After function call
+self.memory.update(
+    self.agent_id,
+    {
+        "type": "action_function_call",
+        "action_name": function_name,
+        "args": function_args,
+        "result": result_from_function,
+    },
+)
+
+# After communication
+self.memory.update(
+    self.agent_id,
+    {
+        "type": "action_communicate",
+        "action_name": "communicate_to",
+        "result": summary,
+    },
+)
+
+# After direct response
+self.memory.update(
+    self.agent_id,
+    {
+        "type": "action_response",
+        "result": result.content
+    },
+)
+```
+
+See agent memory updates in [marble/agent/base_agent.py](/home/daytona/workspace/source/marble/agent/base_agent.py).
+
+## Memory Usage in Planning
+
+Agents use memory when planning their next task:
+
+```python
+def plan_task(self) -> Optional[str]:
+    """
+    Plan the next task based on memory and task history.
+    """
+    # Retrieve memory
+    memory_str = self.memory.get_memory_str()
+    task_history_str = ", ".join(self.task_history)
+    persona = self.get_profile()
+    
+    # Use memory in planning prompt
+    next_task = model_prompting(
+        llm_model=self.llm,
+        messages=[{
+            "role": "user",
+            "content": (
+                f"Agent '{self.agent_id}' should prioritize tasks "
+                f"that align with their role: {persona}. "
+                f"Based on task history: {task_history_str}, "
+                f"and memory: {memory_str}, "
+                f"what should be the next task?"
+            ),
+        }],
+    )[0].content
+    
+    return next_task
+```
+
+See [marble/agent/base_agent.py:602-645](/home/daytona/workspace/source/marble/agent/base_agent.py#L602-L645)
+
+## Memory Initialization
+
+The Engine initializes the appropriate memory type based on configuration:
+
+```python
+def _initialize_memory(
+    self, memory_config: Dict[str, Any]
+) -> Union[SharedMemory, BaseMemory]:
+    """
+    Initialize the shared memory mechanism.
+    
+    Args:
+        memory_config (dict): Memory configuration.
+    
+    Returns:
+        BaseMemory: An instance of the memory module.
+    """
+    memory_type = memory_config.get("type", "SharedMemory")
+    
+    if memory_type == "SharedMemory":
+        memory = SharedMemory()
+    else:
+        memory = BaseMemory()
+    
+    self.logger.debug(f"Memory of type '{memory_type}' initialized.")
+    return memory
+```
+
+See [marble/engine/engine.py:179-198](/home/daytona/workspace/source/marble/engine/engine.py#L179-L198)
+
+## Memory Selection Guide
+
+<CardGroup cols={2}>
+  <Card title="BaseMemory" icon="list">
+    **When to use**: Simple tasks, debugging, development
+    
+    **Pros**: Simple, predictable, no overhead
+    
+    **Cons**: No capacity limits, no retrieval optimization
+  </Card>
+  
+  <Card title="ShortTermMemory" icon="clock">
+    **When to use**: Long conversations, iterative tasks, bounded context
+    
+    **Pros**: Automatic summarization, fixed capacity, recent context preserved
+    
+    **Cons**: Older information compressed, summarization cost
+  </Card>
+  
+  <Card title="LongTermMemory" icon="database">
+    **When to use**: Knowledge-intensive tasks, learning from experience, large datasets
+    
+    **Pros**: Semantic retrieval, scalable, finds relevant information
+    
+    **Cons**: Embedding computation cost, requires retrieval queries
+  </Card>
+  
+  <Card title="SharedMemory" icon="share-nodes">
+    **When to use**: Multi-agent coordination, global state, cognitive evolution
+    
+    **Pros**: Thread-safe, global access, key-value interface
+    
+    **Cons**: Can reduce agent autonomy if overused
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+### Memory Structure
+
+Store structured information for better retrieval:
+
+```python
+# Good: Structured memory
+memory.update(agent_id, {
+    "type": "action_function_call",
+    "action_name": "search_web",
+    "args": {"query": "machine learning"},
+    "result": {"success": True, "results": [...]},
+    "timestamp": datetime.now().isoformat(),
+})
+
+# Less ideal: Unstructured string
+memory.update(agent_id, "Searched for machine learning and found results")
+```
+
+### Memory Queries
+
+For LongTermMemory, query with structured information:
+
+```python
+# Retrieve relevant past searches
+relevant_memories = long_term_memory.retrieve_most_relevant(
+    information={
+        "type": "action_function_call",
+        "action_name": "search_web",
+        "args": {"query": "deep learning"},  # Similar to previous query
+    },
+    n=3,  # Get top 3 most similar
+    summarize=True,  # Get a summary
+)
+```
+
+### Capacity Management
+
+Choose appropriate limits for ShortTermMemory:
+
+```python
+# For short tasks
+short_memory = ShortTermMemory(memory_limit=5)
+
+# For longer conversations
+long_memory = ShortTermMemory(memory_limit=20)
+
+# Too large defeats the purpose
+too_large = ShortTermMemory(memory_limit=1000)  # Use LongTermMemory instead
+```
+
+<Info>
+  **Rule of thumb**: If your task needs more than 20-30 memory items, consider using LongTermMemory with retrieval instead of ShortTermMemory.
+</Info>
+
+## Related Concepts
+
+<CardGroup cols={3}>
+  <Card title="Agents" icon="user-robot" href="/concepts/agents">
+    Learn how agents use memory
+  </Card>
+  
+  <Card title="Engine" icon="gears" href="/concepts/engine">
+    See memory in coordination
+  </Card>
+  
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Understand the full system
+  </Card>
+</CardGroup>

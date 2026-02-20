@@ -1,0 +1,407 @@
+---
+title: "Coding Benchmark Tasks"
+description: "Software development collaboration benchmarks with 100 real-world programming scenarios"
+---
+
+## Overview
+
+The Coding benchmark evaluates multi-agent collaboration on **software development tasks**. It contains **100 tasks** covering diverse programming scenarios from web applications to game development, testing agents' ability to coordinate on code architecture, implementation, and testing.
+
+## Task Characteristics
+
+### Agent Configuration
+- **Number of Agents**: 3
+- **Agent Roles**: Developer agents with complementary skills
+- **Collaboration Mode**: Graph-based peer coordination
+- **Relationship Type**: Bidirectional collaboration
+
+### Environment
+- **Type**: Coding Environment
+- **Workspace**: Isolated file system (`workspace/`)
+- **Max Iterations**: Variable (typically 10-30)
+- **Tools**: File operations, code execution, testing frameworks
+
+## Task Categories
+
+The 100 coding tasks span multiple software development domains:
+
+### 1. Web Applications (30 tasks)
+- Social networking platforms
+- E-commerce systems
+- Content management systems
+- Real-time collaboration tools
+
+### 2. Business Software (25 tasks)
+- Task management systems
+- Project tracking tools
+- Team collaboration platforms
+- Resource management systems
+
+### 3. Game Development (20 tasks)
+- Turn-based strategy games
+- Multiplayer games
+- Puzzle games
+- Board game implementations
+
+### 4. Data Processing (15 tasks)
+- Analytics tools
+- Visualization systems
+- Report generators
+- Data transformation pipelines
+
+### 5. Specialized Applications (10 tasks)
+- Security monitoring systems
+- IoT control systems
+- Financial tools
+- Educational platforms
+
+## Example Tasks
+
+### Task 1: CulturalExchangeHub Platform
+
+<Accordion title="View Full Task Description">
+
+**Objective**: Build a web-based platform for cultural exchange and learning
+
+**Requirements**:
+1. User registration and profile management system
+2. Virtual tour module with 3D cultural landmarks
+3. Language learning and practice feature with real-time pairing
+4. Cultural workshop module with live/recorded sessions
+
+**Dependencies**:
+- User registration must be completed before other features
+- Virtual tour module depends on user registration
+- Language learning requires virtual tour completion
+- Workshop module integrates all previous modules
+
+**Evaluation Criteria**:
+- Feature completeness
+- Dependency handling
+- Code quality and organization
+- Test coverage
+
+</Accordion>
+
+### Task 2: FoodChain Delivery System
+
+<Accordion title="View Full Task Description">
+
+**Objective**: Develop a food delivery and management platform
+
+**Requirements**:
+1. Customer interface for browsing restaurants and ordering
+2. Restaurant management interface for orders
+3. Delivery personnel tracking system
+4. Adaptive task management for route optimization
+5. Customer feedback and rating system
+6. Real-time notification system
+7. Security measures for data protection
+
+**Key Features**:
+- Real-time order tracking
+- Dynamic route adjustment
+- Multi-party communication
+- Rating and review system
+
+</Accordion>
+
+### Task 3: CollaborativeSchedulePlanner
+
+<Accordion title="View Full Task Description">
+
+**Objective**: Multi-agent scheduling application for team coordination
+
+**Requirements**:
+1. Multi-user task input with priorities and dependencies
+2. Real-time collaborative interface with notifications
+3. Machine learning for dynamic schedule optimization
+4. Feedback system for adaptive adjustments
+5. Reports and visualizations (Gantt charts, time summaries)
+
+**Technical Challenges**:
+- Concurrent user modifications
+- Conflict resolution
+- Real-time synchronization
+- ML-based optimization
+
+</Accordion>
+
+## Task Structure
+
+### Agent Profiles
+
+Each coding task includes 3 agents with specialized capabilities:
+
+```json
+{
+  "agent_id": "agent1",
+  "profile": "Developer skilled in frontend development, UI/UX design, and user interactions. Capable of implementing responsive interfaces and real-time updates.",
+  "type": "BaseAgent"
+}
+```
+
+### Relationship Graph
+
+All agents collaborate in a fully-connected graph:
+
+```json
+"relationships": [
+  ["agent1", "agent2", "collaborates with"],
+  ["agent2", "agent1", "collaborates with"],
+  ["agent1", "agent3", "collaborates with"],
+  ["agent3", "agent1", "collaborates with"],
+  ["agent2", "agent3", "collaborates with"],
+  ["agent3", "agent2", "collaborates with"]
+]
+```
+
+### Task Content Format
+
+```python
+{
+  "content": """Software Development Task:
+
+Please write a system called [SYSTEM_NAME]...
+
+1. Implementation requirements:
+   - Requirement 1 with dependencies
+   - Requirement 2...
+   
+2. Project structure:
+   - solution.py (main implementation)
+   - Additional files as needed
+   
+3. Development process:
+   - Developer: Create the code
+   - Developer: Revise the code
+   - Developer: Optimize the code
+   
+4. Test cases:
+   - Input scenarios
+   - Expected outputs
+   - Edge cases
+"""
+}
+```
+
+## Common Implementation Requirements
+
+Tasks typically include these standard requirements:
+
+### User Management
+- User registration and authentication
+- Profile creation and editing
+- Access control and permissions
+
+### Data Management
+- Database design and implementation
+- CRUD operations
+- Data validation and sanitization
+
+### Real-Time Features
+- WebSocket communication
+- Live updates and notifications
+- Concurrent user handling
+
+### Testing
+- Comprehensive test cases
+- Input validation scenarios
+- Edge case handling
+- Performance testing
+
+## Evaluation Metrics
+
+### Code Quality (40%)
+- **Correctness**: Code executes without errors
+- **Completeness**: All requirements implemented
+- **Organization**: Clean, modular structure
+- **Documentation**: Clear comments and docstrings
+
+### Functionality (30%)
+- **Feature Implementation**: All specified features working
+- **Dependency Handling**: Correct execution order
+- **Error Handling**: Graceful error management
+- **Integration**: Components work together seamlessly
+
+### Testing (20%)
+- **Test Coverage**: Comprehensive test cases
+- **Test Passage**: All tests pass successfully
+- **Edge Cases**: Proper handling of unusual inputs
+- **Validation**: Input and output validation
+
+### Collaboration (10%)
+- **Communication**: Effective agent coordination
+- **Task Distribution**: Efficient work division
+- **Conflict Resolution**: Handling disagreements
+- **Iteration Efficiency**: Completing task in minimal iterations
+
+## Running Coding Benchmarks
+
+### Load and Execute a Task
+
+```python
+import json
+from marble import CodingEnvironment, MultiAgentSystem
+
+# Load task
+with open('multiagentbench/coding/coding_main.jsonl') as f:
+    tasks = [json.loads(line) for line in f]
+
+task = tasks[0]  # First task
+
+# Initialize system
+mas = MultiAgentSystem(
+    agents=task['agents'],
+    environment=CodingEnvironment(
+        workspace_dir=task['environment']['workspace_dir'],
+        max_iterations=task['environment']['max_iterations']
+    ),
+    relationships=task['relationships']
+)
+
+# Run task
+result = mas.run(task['task']['content'])
+
+# Check results
+print(f"Task Completed: {result.success}")
+print(f"Files Created: {result.files}")
+print(f"Tests Passed: {result.tests_passed}/{result.total_tests}")
+```
+
+### Evaluate Code Quality
+
+```python
+from marble.benchmarks.coding import CodingEvaluator
+
+evaluator = CodingEvaluator()
+score = evaluator.evaluate(
+    code_files=result.files,
+    requirements=task['task']['content'],
+    test_results=result.test_results
+)
+
+print(f"Overall Score: {score.total:.2f}")
+print(f"Code Quality: {score.code_quality:.2f}")
+print(f"Functionality: {score.functionality:.2f}")
+print(f"Testing: {score.testing:.2f}")
+print(f"Collaboration: {score.collaboration:.2f}")
+```
+
+### Run Full Benchmark Suite
+
+```python
+from marble.benchmarks import BenchmarkRunner
+
+runner = BenchmarkRunner(
+    benchmark='coding',
+    model='gpt-4o',
+    num_tasks=100,
+    output_dir='results/coding'
+)
+
+results = runner.run_all()
+
+# Generate report
+runner.generate_report(
+    results=results,
+    output_file='results/coding/report.html'
+)
+
+print(f"Tasks Completed: {results.success_rate:.1%}")
+print(f"Average Score: {results.avg_score:.2f}")
+print(f"Average Iterations: {results.avg_iterations:.1f}")
+```
+
+## Example Task Outputs
+
+### Successful Task Completion
+
+```python
+# Agent 1 creates base structure
+class CulturalExchangeHub:
+    def __init__(self):
+        self.users = {}
+        self.tours = []
+        self.sessions = []
+    
+    def register_user(self, user_data):
+        """Register a new user"""
+        user_id = len(self.users) + 1
+        self.users[user_id] = user_data
+        return user_id
+
+# Agent 2 adds tour functionality
+    def create_tour(self, tour_data):
+        """Create a virtual tour"""
+        tour = VirtualTour(**tour_data)
+        self.tours.append(tour)
+        return tour
+
+# Agent 3 implements language learning
+    def pair_language_learners(self, user1_id, user2_id):
+        """Pair users for language exchange"""
+        session = LanguageSession(user1_id, user2_id)
+        self.sessions.append(session)
+        return session
+```
+
+## Common Challenges
+
+### Challenge 1: Dependency Management
+**Problem**: Implementing features in wrong order  
+**Solution**: Agents must parse and respect dependency chains
+
+### Challenge 2: Code Integration
+**Problem**: Incompatible code from different agents  
+**Solution**: Define clear interfaces and contracts upfront
+
+### Challenge 3: Test Coverage
+**Problem**: Missing edge cases in tests  
+**Solution**: Systematic analysis of requirements for test generation
+
+### Challenge 4: Concurrent Development
+**Problem**: Agents modifying same files simultaneously  
+**Solution**: Implement file locking or clear module boundaries
+
+## Best Practices
+
+### For Agent Coordination
+1. **Establish clear roles** early in the task
+2. **Define interfaces** before implementation
+3. **Communicate dependencies** explicitly
+4. **Review code** before integration
+5. **Test incrementally** after each feature
+
+### For Code Quality
+1. **Follow Python conventions** (PEP 8)
+2. **Write modular code** with single responsibility
+3. **Document all functions** with docstrings
+4. **Handle errors gracefully** with try-except
+5. **Validate all inputs** before processing
+
+### For Testing
+1. **Cover all requirements** in test cases
+2. **Test edge cases** and error conditions
+3. **Use meaningful test names** describing scenarios
+4. **Assert expected behavior** explicitly
+5. **Test integration** between components
+
+## Task Difficulty Levels
+
+| Level | Tasks | Characteristics |
+|-------|-------|----------------|
+| **Easy** | 1-15 | Single module, simple CRUD, minimal dependencies |
+| **Medium** | 16-70 | Multiple modules, complex logic, moderate dependencies |
+| **Hard** | 71-100 | Full applications, real-time features, complex dependencies |
+
+## Related Benchmarks
+
+<CardGroup cols={2}>
+  <Card title="Database Benchmarks" icon="database" href="/benchmarks/database">
+    SQL and data management tasks
+  </Card>
+  <Card title="Research Benchmarks" icon="flask" href="/benchmarks/research">
+    Academic collaboration scenarios
+  </Card>
+</CardGroup>

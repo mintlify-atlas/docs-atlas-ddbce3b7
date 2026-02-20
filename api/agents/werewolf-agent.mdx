@@ -1,0 +1,672 @@
+---
+title: 'WerewolfAgent'
+description: 'Specialized agent for playing the Werewolf social deduction game with role-based actions and strategic decision-making'
+---
+
+## Overview
+
+The `WerewolfAgent` class is a specialized agent designed for playing the Werewolf social deduction game. It handles role-specific actions, maintains game state through shared memory, uses an event-driven architecture, and supports both cooperative and independent strategies.
+
+**Source**: `marble/agent/werewolf_agent.py`
+
+## Class Definition
+
+```python
+class WerewolfAgent:
+    """
+    WerewolfAgent class for the Werewolf game without calling BaseAgent's __init__.
+    """
+```
+
+<Note>
+  WerewolfAgent does not inherit from BaseAgent. It implements a custom initialization for game-specific requirements.
+</Note>
+
+## Constructor
+
+### `__init__`
+
+```python
+def __init__(
+    self,
+    config: Dict[str, Any],
+    role: str,
+    log_path: str,
+    event_bus: EventBus,
+    shared_memory: Dict[str, Any],
+    env: any,
+    number: int,
+    is_villager: bool,
+    strategy: str = "independent",
+)
+```
+
+Initialize a Werewolf game agent with role-specific configuration and game infrastructure.
+
+<ParamField path="config" type="Dict[str, Any]" required>
+  Configuration dictionary containing:
+  - `agent_id` (str): Unique identifier for the agent
+  - `villager_config` (dict): Configuration for villager roles (model, API keys)
+  - `werewolf_config` (dict): Configuration for werewolf roles (model, API keys)
+  - `openai_api_key` (str): Default API key if not specified in role configs
+</ParamField>
+
+<ParamField path="role" type="str" required>
+  Role in the game: `"wolf"`, `"villager"`, `"prophet"`, `"witch"`, or `"guard"`.
+</ParamField>
+
+<ParamField path="log_path" type="str" required>
+  Directory path where game logs will be stored.
+</ParamField>
+
+<ParamField path="event_bus" type="EventBus" required>
+  Event bus for subscribing to and publishing game events.
+</ParamField>
+
+<ParamField path="shared_memory" type="Dict[str, Any]" required>
+  Shared memory dictionary containing game state accessible to all agents.
+</ParamField>
+
+<ParamField path="env" type="Any" required>
+  The Werewolf environment instance managing the game.
+</ParamField>
+
+<ParamField path="number" type="int" required>
+  Agent's unique number in the game (e.g., Player 1, Player 2).
+</ParamField>
+
+<ParamField path="is_villager" type="bool" required>
+  `True` if the agent is on the villager team, `False` if werewolf.
+</ParamField>
+
+<ParamField path="strategy" type="str" default="independent">
+  Strategy type: `"independent"` or `"cooperative"`.
+</ParamField>
+
+**Source**: `marble/agent/werewolf_agent.py:18`
+
+### Example
+
+```python
+from marble.agent.werewolf_agent import WerewolfAgent
+from marble.utils.eventbus import EventBus
+
+config = {
+    "agent_id": "player_1",
+    "villager_config": {
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-...",
+        "model_name": "gpt-4o"
+    },
+    "werewolf_config": {
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-...",
+        "model_name": "gpt-4o-mini"
+    }
+}
+
+event_bus = EventBus()
+shared_memory = {"public_state": {}, "private_state": {}}
+
+agent = WerewolfAgent(
+    config=config,
+    role="prophet",
+    log_path="./logs",
+    event_bus=event_bus,
+    shared_memory=shared_memory,
+    env=werewolf_env,
+    number=1,
+    is_villager=True,
+    strategy="cooperative"
+)
+```
+
+## Game Roles
+
+<CardGroup cols={2}>
+  <Card title="Werewolf" icon="wolf">
+    **Team**: Werewolf
+    
+    Eliminates villagers during night phases. Coordinates with other werewolves to choose targets.
+  </Card>
+  
+  <Card title="Villager" icon="user">
+    **Team**: Villager
+    
+    Standard villager role. Votes to eliminate suspected werewolves during day phases.
+  </Card>
+  
+  <Card title="Prophet/Seer" icon="eye">
+    **Team**: Villager
+    
+    Can check one player each night to learn if they are a werewolf or villager.
+  </Card>
+  
+  <Card title="Witch" icon="flask">
+    **Team**: Villager
+    
+    Has one antidote (to save) and one poison (to eliminate). Can use each once per game.
+  </Card>
+  
+  <Card title="Guard" icon="shield">
+    **Team**: Villager
+    
+    Can protect one player each night. Cannot protect the same player consecutively.
+  </Card>
+</CardGroup>
+
+## Core Methods
+
+### `act`
+
+```python
+def act(self, event: Dict[str, Any]) -> Dict[str, Any]
+```
+
+Agent takes an action based on the received event. Routes to role-specific handlers.
+
+<ParamField path="event" type="Dict[str, Any]" required>
+  Event dictionary containing:
+  - `event_type` (str): Type of event (e.g., "werewolf_action", "seer_action", "vote_action")
+  - `content` (dict): Event-specific data
+  - `sender` (str): ID of the event sender
+  - `recipients` (list): List of intended recipients
+</ParamField>
+
+<ResponseField name="result" type="Dict[str, Any]">
+  Action event dictionary with:
+  - `event_type` (str): Response event type (e.g., "reply_werewolf_action")
+  - `sender` (str): This agent's ID
+  - `recipients` (list): Intended recipients (usually the environment)
+  - `content` (dict): Action decision and parameters
+</ResponseField>
+
+**Source**: `marble/agent/werewolf_agent.py:201`
+
+#### Example
+
+```python
+event = {
+    "event_type": "seer_action",
+    "sender": "environment",
+    "recipients": [prophet_agent],
+    "content": {
+        "night_info": [{"player": "player_2", "result": "villager"}],
+        "alive_players": ["player_1", "player_2", "player_3"]
+    }
+}
+
+action = agent.act(event)
+print(action)
+# {
+#   "event_type": "reply_seer_action",
+#   "sender": "player_1",
+#   "recipients": [env],
+#   "content": {"action": "check", "target": "player_3"}
+# }
+```
+
+---
+
+### `receive_communication`
+
+```python
+def receive_communication(
+    self,
+    event: Dict[str, Any],
+    debug: bool = False
+) -> None
+```
+
+Receive and process events from the EventBus. Filters events based on recipient list and agent status.
+
+<ParamField path="event" type="Dict[str, Any]" required>
+  Event data from the event bus.
+</ParamField>
+
+<ParamField path="debug" type="bool" default="False">
+  Enable detailed debug logging if `True`.
+</ParamField>
+
+**Source**: `marble/agent/werewolf_agent.py:259`
+
+#### Event Filtering
+
+The agent only processes events if:
+1. Agent is in the recipients list
+2. Agent is in the alive players list
+3. Special conditions are met (e.g., has sheriff badge for certain events)
+
+#### Example
+
+```python
+event = {
+    "event_type": "vote_action",
+    "sender": "environment",
+    "recipients": [agent1, agent2, agent3],
+    "content": {"phase": "day_vote"}
+}
+
+agent.receive_communication(event, debug=True)
+# Agent processes event and publishes action
+```
+
+---
+
+### `gpt_tool_call`
+
+```python
+def gpt_tool_call(self, messages: list, tools: list) -> list
+```
+
+Call the GPT model with messages and tool definitions to get structured action decisions.
+
+<ParamField path="messages" type="list" required>
+  List of message dictionaries with `role` and `content`.
+</ParamField>
+
+<ParamField path="tools" type="list" required>
+  List of tool/function definitions in OpenAI format.
+</ParamField>
+
+<ResponseField name="tool_calls" type="list">
+  List of tool calls generated by the model.
+</ResponseField>
+
+**Source**: `marble/agent/werewolf_agent.py:340`
+
+#### Example
+
+```python
+messages = [
+    {"role": "system", "content": "You are a prophet in Werewolf game."},
+    {"role": "user", "content": "Choose a player to check tonight."}
+]
+
+tools = [{
+    "type": "function",
+    "function": {
+        "name": "check_player",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target": {"type": "string"}
+            }
+        }
+    }
+}]
+
+tool_calls = agent.gpt_tool_call(messages, tools)
+```
+
+## Role-Specific Actions
+
+### Werewolf Actions
+
+```python
+def _wolf_action(self, event: Dict[str, Any]) -> Dict[str, Any]
+```
+
+Process werewolf-specific actions including target selection and team coordination.
+
+**Event Types**:
+- `werewolf_action`: Initial target selection
+- `werewolf_discussion`: Coordinate with other werewolves to agree on target
+
+**Source**: `marble/agent/werewolf_agent.py:371`
+
+#### Example
+
+```python
+# Werewolf selects target
+event = {
+    "event_type": "werewolf_action",
+    "content": {
+        "player_info": {
+            "alive_players": "player_1, player_2, player_3",
+            "alive_werewolves": "player_4, player_5"
+        }
+    }
+}
+
+result = agent._wolf_action(event)
+# {"action": "kill", "target": "player_1"}
+```
+
+---
+
+### General Actions
+
+```python
+def _perform_action(self, action: Dict[str, Any]) -> Dict[str, Any]
+```
+
+Generalized action handler for all other role-specific actions.
+
+**Supported Event Types**:
+- `witch_action`: Use poison or antidote
+- `guard_action`: Protect a player
+- `seer_action`: Check a player's role
+- `run_for_sheriff`: Decide to run for sheriff
+- `sheriff_speech`: Give campaign speech
+- `vote_for_sheriff`: Vote for sheriff candidate
+- `decide_speech_sequence`: Set speech order (sheriff only)
+- `player_speech`: Give speech during day phase
+- `vote_action`: Vote to eliminate a player
+- `last_words`: Final statement before elimination
+- `badge_flow`: Transfer sheriff badge before death
+
+**Source**: `marble/agent/werewolf_agent.py:489`
+
+#### Example: Witch Action
+
+```python
+event = {
+    "event_type": "witch_action",
+    "content": {
+        "night_info": "player_2"  # Who was killed
+    }
+}
+
+result = agent._perform_action(event)
+# {"action": "save", "target": "player_2"}
+# or
+# {"action": "poison", "target": "player_4"}
+# or
+# {"action": "no_action", "target": None}
+```
+
+## Strategy System
+
+<Tabs>
+  <Tab title="Independent">
+    **Strategy**: `"independent"`
+    
+    Agents make decisions based primarily on their own judgment with less reliance on team coordination.
+    
+    ```python
+    agent = WerewolfAgent(
+        config=config,
+        role="villager",
+        strategy="independent",
+        # ... other params
+    )
+    ```
+    
+    Best for: Werewolf roles, experienced players, competitive play
+  </Tab>
+  
+  <Tab title="Cooperative">
+    **Strategy**: `"cooperative"`
+    
+    Agents prioritize teamwork and collaboration with other villagers. More emphasis on group consensus.
+    
+    ```python
+    agent = WerewolfAgent(
+        config=config,
+        role="prophet",
+        strategy="cooperative",
+        # ... other params
+    )
+    ```
+    
+    Best for: Villager roles, team-oriented play, learning scenarios
+  </Tab>
+</Tabs>
+
+## Serialization Methods
+
+### `to_dict`
+
+```python
+def to_dict(self) -> Dict[str, Any]
+```
+
+Serialize the agent's key information to a JSON-serializable dictionary.
+
+<ResponseField name="data" type="Dict[str, Any]">
+  Dictionary containing:
+  - `role` (str): Agent's role
+  - `is_villager` (bool): Team affiliation
+  - `number` (int): Player number
+  - `config` (dict): Agent configuration
+</ResponseField>
+
+**Source**: `marble/agent/werewolf_agent.py:97`
+
+---
+
+### `from_dict`
+
+```python
+@classmethod
+def from_dict(
+    cls,
+    agent_data: Dict[str, Any],
+    log_path: str,
+    event_bus: EventBus,
+    shared_memory: Dict[str, Any],
+    env: Any,
+    strategy: str = "independent",
+) -> "WerewolfAgent"
+```
+
+Create a WerewolfAgent from serialized data.
+
+<ParamField path="agent_data" type="Dict[str, Any]" required>
+  Serialized agent data from `to_dict()`.
+</ParamField>
+
+<ParamField path="log_path" type="str" required>
+  Path for game logs.
+</ParamField>
+
+<ParamField path="event_bus" type="EventBus" required>
+  New event bus instance.
+</ParamField>
+
+<ParamField path="shared_memory" type="Dict[str, Any]" required>
+  New shared memory instance.
+</ParamField>
+
+<ParamField path="env" type="Any" required>
+  New environment instance.
+</ParamField>
+
+<ParamField path="strategy" type="str" default="independent">
+  Strategy to use.
+</ParamField>
+
+<ResponseField name="agent" type="WerewolfAgent">
+  Reconstructed agent instance.
+</ResponseField>
+
+**Source**: `marble/agent/werewolf_agent.py:109`
+
+## Logging System
+
+### `_log_and_save`
+
+```python
+def _log_and_save(self, log_entry: str) -> None
+```
+
+Output log to terminal and save to the agent's log file.
+
+**Source**: `marble/agent/werewolf_agent.py:176`
+
+---
+
+### `_write_log_entry`
+
+```python
+def _write_log_entry(self, log_entry: str) -> None
+```
+
+Save log to file only, without terminal output.
+
+**Source**: `marble/agent/werewolf_agent.py:190`
+
+## Attributes
+
+<ResponseField name="agent_id" type="str">
+  Unique identifier for the agent.
+</ResponseField>
+
+<ResponseField name="role" type="str">
+  Game role: "wolf", "villager", "prophet", "witch", or "guard".
+</ResponseField>
+
+<ResponseField name="agent_number" type="int">
+  Player number in the game.
+</ResponseField>
+
+<ResponseField name="is_villager" type="bool">
+  `True` if on villager team, `False` if werewolf.
+</ResponseField>
+
+<ResponseField name="strategy" type="str">
+  Current strategy: "independent" or "cooperative".
+</ResponseField>
+
+<ResponseField name="model_name" type="str">
+  LLM model being used (e.g., "gpt-4o").
+</ResponseField>
+
+<ResponseField name="base_url" type="str">
+  API base URL for the LLM service.
+</ResponseField>
+
+<ResponseField name="api_key" type="str">
+  API key for authentication.
+</ResponseField>
+
+<ResponseField name="env" type="Any">
+  Werewolf environment instance.
+</ResponseField>
+
+<ResponseField name="shared_memory" type="Dict[str, Any]">
+  Shared game state dictionary.
+</ResponseField>
+
+<ResponseField name="event_bus" type="EventBus">
+  Event bus for game communication.
+</ResponseField>
+
+<ResponseField name="log_file_path" type="str">
+  Path to the agent's log file.
+</ResponseField>
+
+<ResponseField name="logger" type="logging.Logger">
+  Logger instance for the agent.
+</ResponseField>
+
+## Complete Example
+
+```python
+from marble.agent.werewolf_agent import WerewolfAgent
+from marble.utils.eventbus import EventBus
+from marble.environments import WerewolfEnvironment
+
+# Initialize game infrastructure
+event_bus = EventBus()
+shared_memory = {
+    "public_state": {
+        "days": 1,
+        "day/night": "night",
+        "alive_players": ["player_1", "player_2", "player_3"],
+        "sheriff": None
+    },
+    "private_state": {
+        "players": {}
+    }
+}
+
+# Configuration with separate settings for villagers and werewolves
+config = {
+    "agent_id": "player_1",
+    "villager_config": {
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-...",
+        "model_name": "gpt-4o"
+    },
+    "werewolf_config": {
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-...",
+        "model_name": "gpt-4o-mini"
+    }
+}
+
+# Create a prophet agent with cooperative strategy
+prophet = WerewolfAgent(
+    config=config,
+    role="prophet",
+    log_path="./game_logs",
+    event_bus=event_bus,
+    shared_memory=shared_memory,
+    env=werewolf_env,
+    number=1,
+    is_villager=True,
+    strategy="cooperative"
+)
+
+# Prophet receives check action event
+event = {
+    "event_type": "seer_action",
+    "sender": "environment",
+    "recipients": [prophet],
+    "content": {
+        "night_info": [],
+        "alive_players": ["player_1", "player_2", "player_3"]
+    }
+}
+
+prophet.receive_communication(event)
+# Prophet processes event and publishes check action
+
+# Serialize agent for saving game state
+agent_data = prophet.to_dict()
+
+# Later, restore agent from saved data
+restored_prophet = WerewolfAgent.from_dict(
+    agent_data=agent_data,
+    log_path="./game_logs",
+    event_bus=new_event_bus,
+    shared_memory=new_shared_memory,
+    env=new_env,
+    strategy="cooperative"
+)
+```
+
+## Prompt Templates
+
+The agent uses YAML-based prompt templates for each action type, located in:
+```
+marble/agent/werewolf_prompts/
+├── werewolf_action.yaml
+├── werewolf_discussion.yaml
+├── witch_prompt.yaml
+├── guard_prompt.yaml
+├── seer_prompt.yaml
+├── run_for_sheriff.yaml
+├── sheriff_speech.yaml
+├── vote_for_sheriff.yaml
+├── decide_speech_sequence.yaml
+├── speech_prompt.yaml
+├── vote_prompt.yaml
+├── last_word_prompt.yaml
+└── badge_flow.yaml
+```
+
+Each template contains:
+- `system`: System message defining agent role
+- `user`: User prompt template with placeholders
+- `tools`: OpenAI function definitions for structured output
+
+**Source**: See specific action methods (e.g., `marble/agent/werewolf_agent.py:382-398`)
+
+## Related
+
+- [BaseAgent](/api/agents/base-agent) - Base agent class
+- [EventBus](/api/utils/eventbus) - Event-driven communication
+- [Environments](/api/environments) - Game environment management

@@ -1,0 +1,447 @@
+---
+title: 'BaseAgent'
+description: 'Base class for all agents in the MARBLE framework'
+---
+
+## Overview
+
+The `BaseAgent` class is the foundation for all agents in MARBLE. It provides core functionality for perception, action, planning, communication, and memory management.
+
+## Constructor
+
+### `__init__(config, env, shared_memory=None, model="gpt-3.5-turbo")`
+
+Initialize an agent with the specified configuration.
+
+<ParamField path="config" type="Dict[str, Any]" required>
+  Agent configuration dictionary containing:
+  - `agent_id` (str, required): Unique identifier for the agent
+  - `profile` (str): Agent's role and capabilities description
+  - `strategy` (str): Reasoning strategy - "default", "cot", "reflexion", or "react"
+  - `llm` (str): Agent-specific language model (overrides model parameter)
+</ParamField>
+
+<ParamField path="env" type="EnvType" required>
+  Environment instance where the agent operates. Can be BaseEnvironment, WebEnvironment, or CodingEnvironment.
+</ParamField>
+
+<ParamField path="shared_memory" type="Union[SharedMemory, None]" default="None">
+  Optional shared memory instance for multi-agent coordination.
+</ParamField>
+
+<ParamField path="model" type="str" default="gpt-3.5-turbo">
+  Language model to use for agent reasoning and actions.
+</ParamField>
+
+<ResponseField name="agent" type="BaseAgent">
+  An initialized agent instance with:
+  - Individual memory system
+  - Token usage tracking
+  - Message box for agent-to-agent communication
+  - Task history
+</ResponseField>
+
+```python Example
+from marble.agent import BaseAgent
+from marble.environments import BaseEnvironment
+
+# Create environment
+env = BaseEnvironment(
+    name="Test Environment",
+    config={"type": "Base", "max_iterations": 10}
+)
+
+# Configure agent
+agent_config = {
+    "agent_id": "researcher",
+    "profile": "Research specialist with expertise in data analysis",
+    "strategy": "cot"
+}
+
+# Initialize agent
+agent = BaseAgent(
+    config=agent_config,
+    env=env,
+    model="gpt-4"
+)
+```
+
+## Core Methods
+
+### `act(task: str)`
+
+Agent decides on and executes an action to perform the given task.
+
+<ParamField path="task" type="str" required>
+  The task description for the agent to perform.
+</ParamField>
+
+<ResponseField name="result" type="tuple">
+  Returns a tuple of:
+  1. `output` (str): Combined result from model reasoning and function execution
+  2. `communication` (Optional[str]): Communication history if agent communicated with others
+</ResponseField>
+
+```python
+task = "Research the latest developments in quantum computing"
+output, communication = agent.act(task)
+
+print(f"Agent output: {output}")
+if communication:
+    print(f"Communication log: {communication}")
+```
+
+<Expandable title="How act() Works">
+  1. Appends task to task history
+  2. Retrieves available tools from environment
+  3. Gets list of related agents from agent graph
+  4. Applies reasoning strategy prompt (CoT, ReAct, etc.)
+  5. Calls LLM with tools and task
+  6. Executes function calls if returned
+  7. Handles communication sessions if initiated
+  8. Updates memory with actions and results
+</Expandable>
+
+### `plan_task()`
+
+Plan the next task based on agent's memory, history, and profile.
+
+<ResponseField name="next_task" type="Optional[str]">
+  Description of the next task the agent should perform, or None if unable to plan.
+</ResponseField>
+
+```python
+next_task = agent.plan_task()
+if next_task:
+    print(f"Agent planned: {next_task}")
+    output, _ = agent.act(next_task)
+```
+
+### `perceive(state: Any)`
+
+Agent perceives and processes the environment state.
+
+<ParamField path="state" type="Any" required>
+  The current state of the environment (typically a dictionary).
+</ParamField>
+
+<ResponseField name="perception" type="Any">
+  Processed perception data, typically the task description from the state.
+</ResponseField>
+
+```python
+state = {"task_description": "Analyze user feedback"}
+perception = agent.perceive(state)
+```
+
+## Communication Methods
+
+### `send_message(session_id, target_agent, message)`
+
+Send a message to another agent within a session.
+
+<ParamField path="session_id" type="str" required>
+  Identifier for the current communication session.
+</ParamField>
+
+<ParamField path="target_agent" type="BaseAgent" required>
+  The agent to whom the message is being sent.
+</ParamField>
+
+<ParamField path="message" type="str" required>
+  The message content to send.
+</ParamField>
+
+```python
+import uuid
+
+session_id = str(uuid.uuid4())
+agent1.send_message(session_id, agent2, "Can you help analyze this data?")
+```
+
+### `receive_message(session_id, from_agent, message)`
+
+Receive a message from another agent.
+
+<ParamField path="session_id" type="str" required>
+  Identifier for the current communication session.
+</ParamField>
+
+<ParamField path="from_agent" type="BaseAgent" required>
+  The agent sending the message.
+</ParamField>
+
+<ParamField path="message" type="str" required>
+  The content of the received message.
+</ParamField>
+
+<Note>
+  This method is typically called automatically by send_message() and not directly by users.
+</Note>
+
+### `seralize_message(session_id="")`
+
+Serialize message history into a readable string format.
+
+<ParamField path="session_id" type="str" default="">
+  Optional session ID to serialize. If empty, serializes all sessions.
+</ParamField>
+
+<ResponseField name="serialized" type="str">
+  Formatted string of all messages in the specified session(s).
+</ResponseField>
+
+```python
+# Get all communication history
+history = agent.seralize_message()
+
+# Get specific session history
+session_history = agent.seralize_message(session_id)
+print(session_history)
+```
+
+## Planning Methods
+
+### `plan_tasks_for_children(task: str)`
+
+Plan and assign tasks to child agents (used in tree coordination).
+
+<ParamField path="task" type="str" required>
+  The overall task to decompose for children.
+</ParamField>
+
+<ResponseField name="tasks" type="Dict[str, Any]">
+  Dictionary mapping child agent IDs to their assigned task descriptions.
+</ResponseField>
+
+```python
+task = "Build a complete web application"
+tasks_for_children = parent_agent.plan_tasks_for_children(task)
+
+# Example output:
+# {
+#   "frontend_agent": "Design and implement the user interface",
+#   "backend_agent": "Create API endpoints and database schema"
+# }
+```
+
+### `plan_next_agent(result, agent_profiles)`
+
+Choose the next agent to pass the task to (used in chain coordination).
+
+<ParamField path="result" type="Any" required>
+  The result from the agent's action.
+</ParamField>
+
+<ParamField path="agent_profiles" type="Dict[str, Dict[str, Any]]" required>
+  Profiles of all available agents.
+</ParamField>
+
+<ResponseField name="selection" type="Tuple[Optional[str], Optional[str]]">
+  Returns tuple of:
+  1. `agent_id`: ID of the next agent to execute
+  2. `planning_task`: Task description for the next agent
+</ResponseField>
+
+```python
+agent_profiles = {
+    "analyst": {"profile": "Data analysis expert"},
+    "writer": {"profile": "Technical writer"}
+}
+
+result = "Analysis complete: found 3 key insights"
+next_id, next_task = agent.plan_next_agent(result, agent_profiles)
+
+print(f"Next agent: {next_id}")
+print(f"Next task: {next_task}")
+```
+
+## Utility Methods
+
+### `get_profile()`
+
+Get the agent's profile description.
+
+<ResponseField name="profile" type="str">
+  The agent's profile string describing its role and capabilities.
+</ResponseField>
+
+```python
+profile = agent.get_profile()
+print(f"Agent role: {profile}")
+```
+
+### `get_token_usage()`
+
+Get the total token usage by the agent.
+
+<ResponseField name="tokens" type="int">
+  Total number of tokens used by the agent across all operations.
+</ResponseField>
+
+```python
+tokens = agent.get_token_usage()
+print(f"Agent used {tokens} tokens")
+```
+
+### `set_agent_graph(agent_graph: Any)`
+
+Set the agent graph for relationship management.
+
+<ParamField path="agent_graph" type="Any" required>
+  The AgentGraph instance managing agent relationships.
+</ParamField>
+
+```python
+from marble.graph.agent_graph import AgentGraph
+
+graph = AgentGraph(agents, config)
+agent.set_agent_graph(graph)
+```
+
+## Properties
+
+<ParamField path="agent_id" type="str">
+  Unique identifier for the agent.
+</ParamField>
+
+<ParamField path="profile" type="str">
+  Description of the agent's role and capabilities.
+</ParamField>
+
+<ParamField path="strategy" type="str">
+  Reasoning strategy: "default", "cot" (Chain-of-Thought), "reflexion", or "react".
+</ParamField>
+
+<ParamField path="llm" type="str">
+  The language model being used by the agent.
+</ParamField>
+
+<ParamField path="env" type="EnvType">
+  The environment the agent operates in.
+</ParamField>
+
+<ParamField path="memory" type="BaseMemory">
+  Agent's individual memory for storing experiences and information.
+</ParamField>
+
+<ParamField path="task_history" type="List[str]">
+  List of all tasks the agent has performed.
+</ParamField>
+
+<ParamField path="token_usage" type="int">
+  Total tokens consumed by the agent.
+</ParamField>
+
+<ParamField path="children" type="List[BaseAgent]">
+  List of child agents (used in tree coordination).
+</ParamField>
+
+<ParamField path="parent" type="Optional[BaseAgent]">
+  Parent agent reference (used in tree coordination).
+</ParamField>
+
+## Reasoning Strategies
+
+MARBLE supports multiple reasoning strategies that affect how agents approach tasks:
+
+<Expandable title="Available Strategies">
+  
+  ### Default
+  Standard reasoning without additional structure.
+  
+  ### Chain-of-Thought (cot)
+  ```
+  1. What is the main objective of this task?
+  2. What information and resources do I have available?
+  3. What approach would be most effective?
+  4. What specific actions should I take?
+  ```
+  
+  ### Reflexion
+  ```
+  1. Initial thoughts on the task
+  2. Analysis of available options
+  3. Potential challenges and solutions
+  4. Final approach decision
+  ```
+  
+  ### ReAct
+  ```
+  Observation: What do I notice about this task?
+  Thought: What are my considerations?
+  Action: What specific action should I take?
+  Result: What do I expect to achieve?
+  ```
+  
+</Expandable>
+
+```python Example
+# Configure agent with Chain-of-Thought strategy
+agent_config = {
+    "agent_id": "thinker",
+    "profile": "Strategic planning agent",
+    "strategy": "cot"  # Use Chain-of-Thought reasoning
+}
+
+agent = BaseAgent(config=agent_config, env=env, model="gpt-4")
+```
+
+## Complete Example
+
+```python
+from marble.agent import BaseAgent
+from marble.environments import ResearchEnvironment
+from marble.graph.agent_graph import AgentGraph
+
+# Create environment
+env = ResearchEnvironment(
+    name="Research Env",
+    config={
+        "type": "Research",
+        "max_iterations": 20
+    }
+)
+
+# Configure multiple agents
+agents_config = [
+    {
+        "agent_id": "researcher",
+        "profile": "Research specialist with deep domain knowledge",
+        "strategy": "cot"
+    },
+    {
+        "agent_id": "analyst",
+        "profile": "Data analyst with statistical expertise",
+        "strategy": "react"
+    }
+]
+
+# Initialize agents
+agents = [
+    BaseAgent(config=cfg, env=env, model="gpt-4")
+    for cfg in agents_config
+]
+
+# Create agent graph
+graph = AgentGraph(agents, config={})
+for agent in agents:
+    agent.set_agent_graph(graph)
+
+# Execute tasks
+task = "Analyze the impact of AI on healthcare"
+for agent in agents:
+    output, comm = agent.act(task)
+    print(f"{agent.agent_id}: {output[:100]}...")
+    print(f"Tokens used: {agent.get_token_usage()}")
+```
+
+## Notes
+
+<Warning>
+  Always call `set_agent_graph()` before using communication features or multi-agent coordination. The agent needs access to the graph to find and interact with other agents.
+</Warning>
+
+<Note>
+  Token usage is automatically tracked and includes both input and output tokens from all LLM calls. Use `get_token_usage()` to monitor consumption.
+</Note>

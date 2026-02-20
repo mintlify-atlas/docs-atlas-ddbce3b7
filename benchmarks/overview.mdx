@@ -1,0 +1,226 @@
+---
+title: "MultiAgentBench Overview"
+description: "Comprehensive benchmark suite for evaluating multi-agent collaboration in MARBLE"
+---
+
+## Introduction
+
+MultiAgentBench is a comprehensive benchmark suite designed to evaluate multi-agent collaboration capabilities across diverse domains. The benchmark contains **100+ tasks** spanning five distinct categories, each testing different aspects of agent coordination, communication, and problem-solving.
+
+## Benchmark Categories
+
+MultiAgentBench consists of 5 major benchmark categories:
+
+| Category | Tasks | Focus Area | Agents |
+|----------|-------|------------|--------|
+| [Coding](/benchmarks/coding) | 25 | Software development collaboration | 3 |
+| [Research](/benchmarks/research) | 25 | Academic research collaboration | 2 |
+| [Database](/benchmarks/database) | 25 | SQL query generation and optimization | 5 |
+| [Minecraft](/benchmarks/minecraft) | 25 | Collaborative building tasks | 3 |
+| [Bargaining](/benchmarks/bargaining) | 25 | Multi-party negotiation | 4 |
+
+## Architecture
+
+### Task Structure
+
+Each benchmark task is defined in JSONL format with the following structure:
+
+```json
+{
+  "scenario": "coding|research|database|minecraft|bargaining",
+  "task_id": 1,
+  "coordinate_mode": "graph",
+  "relationships": [["agent1", "agent2", "collaborates with"]],
+  "llm": "gpt-4o-mini",
+  "environment": {
+    "type": "Coding|Research|Database|Minecraft|Bargaining",
+    "name": "Environment Name",
+    "max_iterations": 20
+  },
+  "agents": [
+    {
+      "agent_id": "agent1",
+      "profile": "Agent description and capabilities",
+      "type": "BaseAgent"
+    }
+  ],
+  "task": {
+    "content": "Task description and requirements"
+  },
+  "metrics": {
+    "evaluate_llm": {
+      "model": "gpt-4o",
+      "provider": "openai"
+    }
+  }
+}
+```
+
+### Key Components
+
+#### Agents
+- Each task defines specialized agent profiles with distinct capabilities
+- Agents collaborate through defined relationships (collaborate, parent-child, etc.)
+- Agent roles are task-specific (developer, researcher, analyst, etc.)
+
+#### Coordination Modes
+- **Graph Mode**: Agents communicate through a relationship graph
+- Enables flexible collaboration patterns
+- Supports hierarchical and peer-to-peer coordination
+
+#### Environments
+- Domain-specific environments for each benchmark category
+- Max iterations control task complexity
+- Environment provides tools and interfaces for agent actions
+
+## Evaluation Metrics
+
+MultiAgentBench evaluates performance across multiple dimensions:
+
+### Success Metrics
+- **Task Completion Rate**: Percentage of successfully completed tasks
+- **Collaboration Quality**: Effectiveness of agent communication and coordination
+- **Efficiency**: Number of iterations and actions required
+- **Solution Quality**: Accuracy and correctness of final outputs
+
+### Domain-Specific Metrics
+- **Coding**: Code correctness, test passage, implementation completeness
+- **Research**: Novelty, feasibility, academic rigor
+- **Database**: Query correctness, optimization level, execution efficiency
+- **Minecraft**: Build accuracy, resource utilization, coordination efficiency
+- **Bargaining**: Deal quality, fairness, satisfaction scores
+
+## Running Benchmarks
+
+### Basic Usage
+
+```python
+from marble import MultiAgentSystem
+import json
+
+# Load a benchmark task
+with open('multiagentbench/coding/coding_main.jsonl') as f:
+    task = json.loads(f.readline())
+
+# Initialize multi-agent system
+mas = MultiAgentSystem.from_config(task)
+
+# Run the task
+result = mas.run()
+
+# Evaluate results
+print(f"Success: {result.success}")
+print(f"Iterations: {result.iterations}")
+print(f"Score: {result.score}")
+```
+
+### Batch Evaluation
+
+```python
+from marble.benchmarks import BenchmarkRunner
+
+# Run all coding tasks
+runner = BenchmarkRunner(
+    benchmark='coding',
+    model='gpt-4o',
+    output_dir='results/coding'
+)
+
+results = runner.run_all()
+runner.generate_report(results)
+```
+
+## Converting JSONL to YAML
+
+MultiAgentBench provides a utility to convert JSONL benchmarks to YAML format:
+
+```bash
+# Convert a benchmark file
+python multiagentbench/jsonl2yaml.py \
+    --input_file multiagentbench/coding/coding_main.jsonl \
+    --output_folder tasks/coding \
+    --default_llm gpt-4o \
+    --default_coordinate_mode graph
+```
+
+### Script Options
+
+```bash
+--input_file           Path to JSONL benchmark file
+--output_folder        Output directory for YAML files
+--default_llm          Default LLM model (default: gpt-3.5-turbo)
+--default_coordinate_mode  Coordination mode (default: graph)
+--default_environment  Environment configuration (JSON string)
+--default_memory       Memory configuration (JSON string)
+--default_output       Output configuration (JSON string)
+```
+
+## Dataset Statistics
+
+### Total Tasks: 500
+
+- **Coding Tasks**: 100 (Software development scenarios)
+- **Research Tasks**: 100 (Academic collaboration scenarios)
+- **Database Tasks**: 100 (SQL and data management scenarios)
+- **Minecraft Tasks**: 100 (Building and coordination scenarios)
+- **Bargaining Tasks**: 100 (Negotiation scenarios)
+
+### Task Complexity Distribution
+
+| Complexity | Tasks | Description |
+|------------|-------|-------------|
+| Simple | ~100 | Single objective, 2-3 agents, under 10 iterations |
+| Moderate | ~250 | Multiple objectives, 3-5 agents, 10-20 iterations |
+| Complex | ~150 | Complex dependencies, 5+ agents, over 20 iterations |
+
+## Benchmark Files
+
+All benchmark files are located in the `multiagentbench/` directory:
+
+```
+multiagentbench/
+├── coding/
+│   └── coding_main.jsonl         # 100 coding tasks
+├── research/
+│   └── research_main.jsonl       # 100 research tasks
+├── database/
+│   └── database_main.jsonl       # 100 database tasks
+├── minecraft/
+│   └── minecraft_main.jsonl      # 100 minecraft tasks
+├── bargaining/
+│   └── bargaining_main.jsonl     # 100 bargaining tasks
+├── jsonl2yaml.py                 # Conversion utility
+└── runjsonl2yaml.sh              # Batch conversion script
+```
+
+## Citation
+
+If you use MultiAgentBench in your research, please cite:
+
+```bibtex
+@inproceedings{multiagentbench2024,
+  title={MultiAgentBench: A Comprehensive Benchmark for Multi-Agent Collaboration},
+  author={MARBLE Team},
+  year={2024}
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Coding Benchmarks" icon="code" href="/benchmarks/coding">
+    Explore software development collaboration tasks
+  </Card>
+  <Card title="Research Benchmarks" icon="flask" href="/benchmarks/research">
+    Learn about academic research collaboration tasks
+  </Card>
+  <Card title="Database Benchmarks" icon="database" href="/benchmarks/database">
+    Discover SQL and data management tasks
+  </Card>
+  <Card title="Minecraft Benchmarks" icon="cube" href="/benchmarks/minecraft">
+    See collaborative building tasks
+  </Card>
+  <Card title="Bargaining Benchmarks" icon="handshake" href="/benchmarks/bargaining">
+    Explore multi-party negotiation scenarios
+  </Card>
+</CardGroup>

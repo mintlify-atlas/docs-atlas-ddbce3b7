@@ -1,0 +1,621 @@
+---
+title: Evaluation Metrics
+description: Understanding and using evaluation metrics in MARBLE simulations
+---
+
+This guide explains how MARBLE evaluates multi-agent simulations using the `Evaluator` class, including built-in metrics and how to create custom evaluation criteria.
+
+## Overview
+
+The `Evaluator` class (evaluator.py:18) tracks various metrics throughout your simulation to measure agent performance, collaboration quality, and task success.
+
+## Core Metrics
+
+MARBLE tracks several key metrics by default:
+
+### Task Completion
+
+Measures whether agents successfully complete their assigned tasks.
+
+```python
+# In your environment
+def is_task_completed(self) -> bool:
+    """Define when your task is considered complete."""
+    last_action_result = self.state.get("last_action_result", "")
+    return self._compare_to_ground_truth(last_action_result, self.ground_truth)
+
+# The evaluator tracks this
+evaluator.update(environment, agents)
+# Stores 1 for completion, 0 for incomplete
+```
+
+**Metric output:**
+```python
+{
+    "task_completion": [0, 0, 1],  # Failed first two iterations, succeeded on third
+    "success_rate": 0.33  # 1 out of 3 iterations
+}
+```
+
+### Token Consumption
+
+Tracks LLM token usage across all agents (evaluator.py:64-65).
+
+```python
+# Automatically tracked per iteration
+total_tokens = sum(agent.get_token_usage() for agent in agents)
+evaluator.metrics["token_consumption"].append(total_tokens)
+```
+
+**Metric output:**
+```python
+{
+    "token_consumption": [1250, 980, 1100],  # Tokens per iteration
+    "total_tokens": 3330,
+    "avg_tokens_per_iteration": 1110
+}
+```
+
+### Communication Quality
+
+Evaluates the effectiveness of agent-to-agent communication (evaluator.py:67-93).
+
+```python
+def evaluate_communication(self, task: str, communications: str) -> None:
+    """Evaluate communication between agents."""
+    # Uses LLM to score communication on 1-5 scale
+    prompt = self.evaluation_prompts["Graph"]["Communication"]["prompt"].format(
+        task=task,
+        communications=communications
+    )
+    
+    result = model_prompting(
+        llm_model=self.llm,
+        messages=[{"role": "user", "content": prompt}],
+        # ...
+    )[0]
+    
+    score = self.parse_score(result.content)  # Extracts 1-5 rating
+    self.metrics["communication_score"].append(score)
+```
+
+**Scoring criteria:**
+- **5**: Highly effective communication, clear coordination
+- **4**: Good communication with minor issues
+- **3**: Adequate communication, some confusion
+- **2**: Poor communication, limited coordination
+- **1**: Communication breakdown
+
+### Planning Quality
+
+Assesses how well agents plan and coordinate tasks (evaluator.py:95-128).
+
+```python
+def evaluate_planning(
+    self, 
+    summary: str, 
+    agent_profiles: str, 
+    agent_tasks: str, 
+    results: str
+) -> None:
+    """Evaluate planning and self-coordination."""
+    prompt = self.evaluation_prompts["Graph"]["Planning"]["prompt"].format(
+        summary=summary,
+        agent_profiles=agent_profiles,
+        agent_tasks=agent_tasks,
+        results=results
+    )
+    
+    # LLM evaluates planning effectiveness
+    score = self.parse_score(result.content)
+    self.metrics["planning_score"].append(score)
+```
+
+### Agent KPIs
+
+Tracks individual agent contributions through milestone achievement (evaluator.py:130-168).
+
+```python
+def evaluate_kpi(self, task: str, agent_results: str) -> None:
+    """Evaluate milestones achieved and update agent KPIs."""
+    prompt = self.evaluation_prompts["Graph"]["KPI"]["prompt"].format(
+        task=task,
+        agent_results=agent_results
+    )
+    
+    result = model_prompting(...)  # Get milestones from LLM
+    milestones = self.parse_milestones(result.content)
+    
+    # Update metrics
+    self.metrics["total_milestones"] += len(milestones)
+    
+    for milestone in milestones:
+        agents = milestone.get("contributing_agents", [])
+        for agent_id in agents:
+            self.metrics["agent_kpis"][agent_id] = \
+                self.metrics["agent_kpis"].get(agent_id, 0) + 1
+```
+
+**Example milestone:**
+```json
+[
+  {
+    "description": "Completed data collection",
+    "contributing_agents": ["agent1", "agent2"]
+  },
+  {
+    "description": "Generated analysis report",
+    "contributing_agents": ["agent3"]
+  }
+]
+```
+
+## Domain-Specific Metrics
+
+### Research Task Evaluation
+
+For research environments (evaluator.py:170-199):
+
+```python
+def evaluate_task_research(self, task: str, result: str) -> None:
+    """Evaluate research ideas on innovation, safety, and feasibility."""
+    prompt = self.evaluation_prompts["research"]["task_evaluation"]["prompt"].format(
+        task=task,
+        result=result
+    )
+    
+    ratings = self.parse_research_ratings(llm_response.content)
+    self.metrics["task_evaluation"] = ratings
+```
+
+**Rating dimensions:**
+```python
+{
+    "innovation": 4,      # 1-5: How novel is the idea?
+    "safety": 5,          # 1-5: How safe to implement?
+    "feasibility": 3,     # 1-5: How practical?
+    "impact": 4           # 1-5: Potential impact?
+}
+```
+
+### Code Quality Evaluation
+
+For coding environments (evaluator.py:509-618):
+
+```python
+def evaluate_code_quality(self, task: str, code_result: str) -> None:
+    """Evaluate code based on multiple quality dimensions."""
+    # Loads task requirements and solution
+    with open('marble/workspace/solution.py', 'r') as f:
+        solution_content = f.read()
+    
+    prompt = self._build_code_quality_prompt(
+        task_description=task,
+        requirements=requirements,
+        solution=solution_content
+    )
+    
+    scores = self.parse_code_quality_scores(response.content)
+    self.metrics["code_quality"] = scores
+```
+
+**Quality dimensions:**
+```python
+{
+    "instruction_following": 4,  # 1-5: Meets requirements?
+    "executability": 3,          # 1-5: Runs without errors?
+    "consistency": 4,            # 1-5: Consistent style?
+    "quality": 4                 # 1-5: Overall quality?
+}
+```
+
+<Tip>
+  Code quality evaluation uses **strict scoring**. The evaluator is instructed to deduct points for every issue and avoid giving identical scores across dimensions.
+</Tip>
+
+### Database Task Evaluation
+
+For database root cause analysis (evaluator.py:284-300):
+
+```python
+def evaluate_task_db(
+    self, 
+    task: str, 
+    result: str, 
+    labels: List[str], 
+    pred_num: int, 
+    root_causes: List[str]
+) -> None:
+    """Evaluate database root cause analysis."""
+    self.metrics["task_evaluation"] = {
+        'root_cause': root_causes,      # Ground truth
+        'predicted': result,            # Agent's prediction
+    }
+    # Further analysis done separately
+```
+
+## Configuration
+
+### Basic Setup
+
+```yaml
+metrics:
+  evaluate_llm: "gpt-4o"  # LLM for evaluation
+  task_completion: true
+  token_consumption: true
+  planning_score: true
+  communication_score: true
+```
+
+### Advanced Configuration
+
+```yaml
+metrics:
+  evaluate_llm:
+    model: "gpt-4o"
+    temperature: 0.0  # Use deterministic evaluation
+  
+  # Enable specific metrics
+  task_completion: true
+  token_consumption: true
+  code_quality: true
+  collaboration_effectiveness: true
+  
+  # Custom evaluation prompts
+  custom_prompts:
+    communication: "path/to/communication_prompt.json"
+    planning: "path/to/planning_prompt.json"
+```
+
+## Accessing Metrics
+
+### During Simulation
+
+```python
+# In engine or custom code
+from marble.evaluator.evaluator import Evaluator
+
+evaluator = Evaluator(metrics_config=config.metrics)
+
+# Update each iteration
+evaluator.update(environment, agents)
+
+# Evaluate specific aspects
+if communications:
+    evaluator.evaluate_communication(task, communications_str)
+
+evaluator.evaluate_planning(summary, agent_profiles, agent_tasks, results)
+evaluator.evaluate_kpi(task, agent_results)
+```
+
+### After Simulation
+
+```python
+# Finalize computes summary statistics
+evaluator.finalize()
+
+# Get computed metrics
+metrics = evaluator.get_metrics()
+print(f"Success Rate: {metrics['success_rate']:.2%}")
+print(f"Total Tokens: {metrics['total_tokens']:,}")
+print(f"Avg Tokens/Iteration: {metrics['avg_tokens_per_iteration']:.1f}")
+
+# Access detailed metrics
+print(f"\nAgent KPIs:")
+for agent_id, count in evaluator.metrics["agent_kpis"].items():
+    print(f"  {agent_id}: {count} milestones")
+
+print(f"\nCommunication Scores: {evaluator.metrics['communication_score']}")
+print(f"Planning Scores: {evaluator.metrics['planning_score']}")
+```
+
+### From Output Files
+
+```python
+import json
+
+# Read simulation results
+with open('result/output.jsonl', 'r') as f:
+    for line in f:
+        result = json.loads(line)
+        
+        print(f"Task: {result['task']}")
+        print(f"Coordination: {result['coordination_mode']}")
+        print(f"Iterations: {len(result['iterations'])}")
+        print(f"\nMetrics:")
+        print(f"  Planning Scores: {result.get('planning_scores', [])}")
+        print(f"  Communication Scores: {result.get('communication_scores', [])}")
+        print(f"  Token Usage: {result.get('token_usage', 0)}")
+        print(f"  Agent KPIs: {result.get('agent_kpis', {})}")
+        print(f"  Task Evaluation: {result.get('task_evaluation', {})}")
+```
+
+## Creating Custom Metrics
+
+<Steps>
+  <Step title="Extend Evaluator Class">
+    Create a custom evaluator with additional metrics:
+
+    ```python
+    from marble.evaluator.evaluator import Evaluator
+    from typing import Any, Dict
+
+    class CustomEvaluator(Evaluator):
+        def __init__(self, metrics_config: Dict[str, Any]):
+            super().__init__(metrics_config)
+            
+            # Add custom metrics
+            self.metrics["agent_interactions"] = []
+            self.metrics["decision_quality"] = []
+            self.metrics["resource_efficiency"] = []
+    ```
+  </Step>
+
+  <Step title="Implement Evaluation Methods">
+    Add methods to compute your custom metrics:
+
+    ```python
+    def evaluate_decision_quality(
+        self, 
+        decision: str, 
+        context: str, 
+        outcome: str
+    ) -> None:
+        """Evaluate quality of agent decisions."""
+        prompt = f"""
+        Context: {context}
+        Decision made: {decision}
+        Actual outcome: {outcome}
+        
+        Rate the decision quality from 1-5 considering:
+        1. Was the decision appropriate given the context?
+        2. Did it lead to the desired outcome?
+        3. Were alternatives considered?
+        
+        Return JSON: {{"rating": <1-5>, "reasoning": "<explanation>"}}
+        """
+        
+        from marble.llms.model_prompting import model_prompting
+        
+        result = model_prompting(
+            llm_model=self.llm,
+            messages=[{"role": "user", "content": prompt}],
+            return_num=1,
+            max_token_num=256,
+            temperature=0.0
+        )[0]
+        
+        rating_data = json.loads(result.content)
+        self.metrics["decision_quality"].append(rating_data["rating"])
+        
+        self.logger.info(
+            f"Decision quality: {rating_data['rating']}/5 - "
+            f"{rating_data['reasoning']}"
+        )
+    
+    def evaluate_resource_efficiency(self, agents, iteration_results) -> None:
+        """Evaluate how efficiently agents use resources."""
+        # Calculate efficiency metrics
+        tokens_used = sum(agent.get_token_usage() for agent in agents)
+        tasks_completed = len([r for r in iteration_results if r.get("success")])
+        
+        efficiency = tasks_completed / tokens_used if tokens_used > 0 else 0
+        self.metrics["resource_efficiency"].append(efficiency)
+        
+        self.logger.info(f"Resource efficiency: {efficiency:.6f} tasks/token")
+    ```
+  </Step>
+
+  <Step title="Integrate with Engine">
+    Use your custom evaluator in the simulation:
+
+    ```python
+    # In engine initialization
+    from your_module import CustomEvaluator
+
+    class CustomEngine(Engine):
+        def __init__(self, config):
+            # ... standard initialization ...
+            
+            # Replace standard evaluator
+            self.evaluator = CustomEvaluator(metrics_config=config.metrics)
+    ```
+  </Step>
+
+  <Step title="Call During Simulation">
+    Evaluate at appropriate points:
+
+    ```python
+    # In your coordination loop
+    for iteration in range(max_iterations):
+        # Agents act
+        for agent in agents:
+            decision = agent.plan_task()
+            result = agent.act(decision)
+            
+            # Evaluate decision quality
+            self.evaluator.evaluate_decision_quality(
+                decision=decision,
+                context=self._get_context(),
+                outcome=result
+            )
+        
+        # Evaluate resource efficiency
+        self.evaluator.evaluate_resource_efficiency(agents, iteration_results)
+    ```
+  </Step>
+</Steps>
+
+## Evaluation Prompts
+
+MARBLE uses structured prompts for LLM-based evaluation (evaluator.py:41-42):
+
+```python
+# Loaded from evaluator/evaluator_prompts.json
+with open('evaluator/evaluator_prompts.json', 'r', encoding='utf-8') as f:
+    self.evaluation_prompts = json.load(f)
+```
+
+**Example prompt structure:**
+```json
+{
+  "Graph": {
+    "Communication": {
+      "prompt": "Evaluate the communication between agents on task: {task}\n\nCommunications: {communications}\n\nRate from 1-5 based on clarity, relevance, and coordination effectiveness. Return JSON: {{\"rating\": <1-5>}}"
+    },
+    "Planning": {
+      "prompt": "Evaluate the planning quality given:\n\nLast summary: {summary}\nAgent profiles: {agent_profiles}\nTasks assigned: {agent_tasks}\nResults: {results}\n\nRate 1-5 the appropriateness of task assignments. Return JSON: {{\"rating\": <1-5>}}"
+    }
+  }
+}
+```
+
+### Custom Prompt Files
+
+Create your own evaluation prompts:
+
+```json
+{
+  "custom_domain": {
+    "decision_quality": {
+      "prompt": "Analyze this decision in the context of {domain}:\n\nDecision: {decision}\nContext: {context}\nOutcome: {outcome}\n\nProvide a rating from 1-5 and detailed reasoning."
+    },
+    "collaboration": {
+      "prompt": "Rate the collaboration effectiveness in this {domain} task...\n"
+    }
+  }
+}
+```
+
+## Best Practices
+
+<Tip>
+  **Evaluation LLM**: Use a stronger model (like `gpt-4o`) for evaluation even if you use lighter models (`gpt-4o-mini`) for agents. This ensures consistent, high-quality assessments.
+</Tip>
+
+### 1. Regular Evaluation
+
+```python
+# Don't wait until the end - evaluate throughout
+for iteration in range(max_iterations):
+    # Agent actions...
+    
+    # Evaluate each iteration
+    evaluator.update(environment, agents)
+    
+    if communications:
+        evaluator.evaluate_communication(task, communications)
+    
+    evaluator.evaluate_planning(summary, profiles, tasks, results)
+```
+
+### 2. Balanced Metrics
+
+Track both quantitative and qualitative metrics:
+
+```python
+metrics_summary = {
+    # Quantitative
+    "total_tokens": evaluator.metrics["token_consumption"],
+    "completion_rate": evaluator.metrics["task_completion"],
+    
+    # Qualitative (LLM-based)
+    "avg_communication_score": sum(evaluator.metrics["communication_score"]) / len(evaluator.metrics["communication_score"]),
+    "avg_planning_score": sum(evaluator.metrics["planning_score"]) / len(evaluator.metrics["planning_score"])
+}
+```
+
+### 3. Score Parsing Robustness
+
+The evaluator includes robust parsing (evaluator.py:331-389):
+
+```python
+def parse_score(self, assistant_answer: str) -> int:
+    """Parse score with fallback strategies."""
+    try:
+        # Try JSON parsing first
+        json_str = extract_json(assistant_answer)
+        rating_data = json.loads(json_str)
+        return int(rating_data["rating"])
+    except:
+        # Fallback to regex
+        numbers = re.findall(r'\b[1-5]\b', assistant_answer)
+        if numbers:
+            return int(numbers[0])
+        
+        # Default fallback
+        return 3  # Neutral score
+```
+
+### 4. Detailed Logging
+
+```python
+evaluator.logger.setLevel(logging.DEBUG)  # Enable detailed logs
+
+# Or add custom logging
+class VerboseEvaluator(Evaluator):
+    def evaluate_communication(self, task, communications):
+        self.logger.info(f"Evaluating communication for task: {task[:50]}...")
+        self.logger.debug(f"Communications length: {len(communications)} chars")
+        
+        score = super().evaluate_communication(task, communications)
+        
+        self.logger.info(f"Communication score: {score}/5")
+        return score
+```
+
+## Visualization and Analysis
+
+### Generate Reports
+
+```python
+import json
+import matplotlib.pyplot as plt
+
+def analyze_simulation_results(jsonl_path: str):
+    """Generate analysis from simulation results."""
+    results = []
+    with open(jsonl_path, 'r') as f:
+        for line in f:
+            results.append(json.loads(line))
+    
+    # Extract metrics
+    for result in results:
+        print(f"\n{'='*60}")
+        print(f"Task: {result['task'][:50]}...")
+        print(f"Mode: {result['coordination_mode']}")
+        print(f"Iterations: {len(result['iterations'])}")
+        
+        # Plot scores
+        if result.get('planning_scores'):
+            plt.figure(figsize=(10, 4))
+            plt.subplot(1, 2, 1)
+            plt.plot(result['planning_scores'], marker='o')
+            plt.title('Planning Scores')
+            plt.xlabel('Iteration')
+            plt.ylabel('Score (1-5)')
+            
+            plt.subplot(1, 2, 2)
+            plt.plot(result['communication_scores'], marker='s')
+            plt.title('Communication Scores')
+            plt.xlabel('Iteration')
+            plt.ylabel('Score (1-5)')
+            
+            plt.tight_layout()
+            plt.show()
+        
+        # Agent KPIs
+        if result.get('agent_kpis'):
+            print("\nAgent KPIs:")
+            for agent_id, count in result['agent_kpis'].items():
+                print(f"  {agent_id}: {count} milestones")
+
+# Use it
+analyze_simulation_results('result/output.jsonl')
+```
+
+## Next Steps
+
+- Review [Running Simulations](/guides/running-simulations) to see metrics in context
+- Learn about [Creating Custom Agents](/guides/creating-agents) to optimize for specific metrics
+- Explore [Building Custom Environments](/guides/custom-environments) with domain-specific evaluation
