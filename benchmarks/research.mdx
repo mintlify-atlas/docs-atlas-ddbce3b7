@@ -311,26 +311,14 @@ task = tasks[0]
 ### Evaluate Research Quality
 
 ```python
-from marble.benchmarks.research import ResearchEvaluator
+# Access research evaluation metrics
+metrics = engine.evaluator.get_metrics()
 
-evaluator = ResearchEvaluator(llm="gpt-4o")
-
-scores = evaluator.evaluate(
-    research_idea=result.idea,
-    agent_profiles=task['agents'],
-    conversation_history=result.messages
-)
-
-print(f"Novelty: {scores.novelty:.2f}")
-print(f"Feasibility: {scores.feasibility:.2f}")
-print(f"Diversity: {scores.diversity:.2f}")
-print(f"Clarity: {scores.clarity:.2f}")
-print(f"Overall: {scores.overall:.2f}")
+print(f"Research Idea Generated: {metrics.get('research_idea_generated', False)}")
+print(f"Novelty Score: {metrics.get('research_novelty', 0)}")
+print(f"Feasibility Score: {metrics.get('research_feasibility', 0)}")
+print(f"Total Tokens: {metrics.get('total_tokens', 0)}")
 ```
-
-### Batch Evaluation
-
-```python
 
 ## Example Research Outputs
 

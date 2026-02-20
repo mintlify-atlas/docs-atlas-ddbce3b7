@@ -357,49 +357,31 @@ mc_env = MinecraftEnvironment(
 ### Evaluate Construction
 
 ```python
-from marble.benchmarks.minecraft import MinecraftEvaluator
+# Access evaluation metrics after simulation
+metrics = engine.evaluator.get_metrics()
 
-evaluator = MinecraftEvaluator(mc_env)
-
-scores = evaluator.evaluate(
-    blueprint=task['task']['content'],
-    built_structure=result.structure,
-    actions=result.actions
-)
-
-print(f"Structure Accuracy: {scores.accuracy:.2f}")
-print(f"Process Efficiency: {scores.efficiency:.2f}")
-print(f"Collaboration Quality: {scores.collaboration:.2f}")
-print(f"Cleanup Score: {scores.cleanup:.2f}")
-print(f"Overall: {scores.overall:.2f}")
+print(f"Task Completed: {metrics.get('task_completed', False)}")
+print(f"Structure Correctness: {metrics.get('structure_correct', False)}")
+print(f"Total Tokens: {metrics.get('total_tokens', 0)}")
 ```
 
-### Batch Evaluation
+## Monitoring Progress
 
-```python
+### View Simulation Logs
 
-## Visualization
+MARBLE automatically logs construction progress:
 
-### View Construction Progress
+```bash
+# Logs are saved in logs/ directory
+tail -f logs/minecraft_simulation.log
 
-```python
-from marble.benchmarks.minecraft import MinecraftVisualizer
-
-visualizer = MinecraftVisualizer()
-
-# Create time-lapse visualization
-visualizer.create_timelapse(
-    actions=result.actions,
-    output_file='construction_timelapse.mp4',
-    fps=2
-)
-
-# Create 3D structure comparison
-visualizer.compare_structures(
-    blueprint=task['task']['content'],
-    built=result.structure,
-    output_file='structure_comparison.html'
-)
+# Check environment state
+python -c "
+from marble.environments.minecraft_env import MinecraftEnvironment
+env = MinecraftEnvironment(...)
+state = env.get_state()
+print(f'Blocks placed: {len(state.placed_blocks)}')
+"
 ```
 
 ## Best Practices

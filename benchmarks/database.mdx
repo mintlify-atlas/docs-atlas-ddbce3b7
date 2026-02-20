@@ -466,25 +466,13 @@ db_env = DatabaseEnvironment(
 ### Evaluate Query Quality
 
 ```python
-from marble.benchmarks.database import DatabaseEvaluator
+# Evaluation is performed automatically
+metrics = engine.evaluator.get_metrics()
 
-evaluator = DatabaseEvaluator(db_env)
-
-scores = evaluator.evaluate(
-    query=result.query,
-    expected_result=task.get('expected_result'),
-    requirements=task['task']['content']
-)
-
-print(f"Correctness: {scores.correctness:.2f}")
-print(f"Efficiency: {scores.efficiency:.2f}")
-print(f"Completeness: {scores.completeness:.2f}")
-print(f"Overall Score: {scores.overall:.2f}")
+print(f"Task Completed: {metrics.get('task_completed', False)}")
+print(f"Query Correctness: {metrics.get('db_query_correctness', 0)}")
+print(f"Total Tokens: {metrics.get('total_tokens', 0)}")
 ```
-
-### Batch Evaluation
-
-```python
 
 ## Example Query Generation
 

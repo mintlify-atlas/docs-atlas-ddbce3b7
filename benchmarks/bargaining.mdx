@@ -438,31 +438,18 @@ bargain_env = BargainingEnvironment(
 
 # Create multi-agent system
 
-### Evaluate Negotiation
+### Access Evaluation Results
+
+Evaluation is performed automatically by the MARBLE evaluator. Access results after simulation:
 
 ```python
-from marble.benchmarks.bargaining import BargainingEvaluator
+# After engine.start() completes
+metrics = engine.evaluator.get_metrics()
 
-evaluator = BargainingEvaluator()
-
-scores = evaluator.evaluate(
-    negotiation_history=result.messages,
-    final_terms=result.terms,
-    product_info=task['task']['product'],
-    buyer_priorities=task['task']['buyer_priorities'],
-    seller_priorities=task['task']['seller_priorities']
-)
-
-print(f"Deal Quality: {scores.deal_quality:.2f}")
-print(f"Process Quality: {scores.process:.2f}")
-print(f"Buyer Satisfaction: {scores.buyer_satisfaction:.2f}")
-print(f"Seller Satisfaction: {scores.seller_satisfaction:.2f}")
-print(f"Overall Score: {scores.overall:.2f}")
+print(f"Task Completed: {metrics.get('task_completed', False)}")
+print(f"Total Tokens: {metrics.get('total_tokens', 0)}")
+print(f"Communication Quality: {metrics.get('communication_quality', 0)}")
 ```
-
-### Batch Evaluation
-
-```python
 
 ## Example Negotiation
 
